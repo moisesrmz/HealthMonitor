@@ -56,7 +56,6 @@ $(document).ready(function () {
     });
 });
 
-
 // Población de la Tabla
 function populateTable(data) {
     const table = $('#results-table').DataTable();
@@ -108,7 +107,13 @@ function updateChart(data) {
         x.push(faline);
         y.push(yieldValue);
 
-        colors.push(yieldValue >= 95 ? "rgba(60,179,113,0.9)" : yieldValue >= 90 ? "rgba(255,223,0,0.9)" : "rgba(255,99,71,0.9)");
+        colors.push(
+            yieldValue >= 95
+                ? "rgba(114,196,149,0.9)"  // Verde pastel
+                : yieldValue >= 90
+                ? "rgba(255,231,64,0.9)"   // Amarillo pastel
+                : "rgba(255,126,99,0.9)"   // Rojo pastel
+        );
 
         let labelText = `Yield: ${yieldValue.toFixed(2)}%\n<br>Pasa: ${passed}\n<br>Falla: ${failed}`;
         const partNumbersFormatted = [...partNumbers].join("<br>");
@@ -122,41 +127,43 @@ function updateChart(data) {
     const layout = {
         title: {
             text: "",
-            font: { color: "#00ccff", size: 24 },
+            font: { color: "#5a8bba", size: 24 }, // Azul pastel
         },
         xaxis: {
             title: "",
-            color: "white",
-            tickfont: { color: "white", size: 12 },
-            titlefont: { color: "#00ccff", size: 16 },
+            color: "#555555",
+            tickfont: { color: "#555555", size: 12 }, // Texto gris oscuro
+            titlefont: { color: "#5a8bba", size: 16 },
         },
         yaxis: {
             title: "Yield (%)",
             range: [0, 100],
-            color: "white",
-            tickfont: { color: "white", size: 12 },
-            titlefont: { color: "#00ccff", size: 16 },
+            color: "#555555",
+            tickfont: { color: "#555555", size: 12 },
+            titlefont: { color: "#5a8bba", size: 16 },
         },
-        plot_bgcolor: "#1b1b1b",
-        paper_bgcolor: "#1b1b1b",
-        font: { color: "white" },
+        plot_bgcolor: "#f9f9f9", // Fondo blanco
+        paper_bgcolor: "#efefef", // Fondo gris claro
+        font: { color: "#555555" }, // Texto gris oscuro
         showlegend: false,
         bargap: 0.3
     };
 
-    const plotData = [{
-        x,
-        y,
-        type: 'bar',
-        text,
-        textposition: 'inside',
-        textfont: { size: 12, color: "white" },
-        hovertemplate: '<b>%{x}</b><br>Yield: %{y:.2f}%<extra></extra>',
-        marker: {
-            color: colors,
-            opacity: 0.9
+    const plotData = [
+        {
+            x,
+            y,
+            type: 'bar',
+            text,
+            textposition: 'inside',
+            textfont: { size: 12, color: "#555555" },
+            hovertemplate: '<b>%{x}</b><br>Yield: %{y:.2f}%<extra></extra>',
+            marker: {
+                color: colors,
+                opacity: 0.9
+            }
         }
-    }];
+    ];
 
     Plotly.newPlot("chart", plotData, layout);
 }

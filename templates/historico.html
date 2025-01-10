@@ -6,143 +6,12 @@
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title>Histórico de Pruebas</title>
         <!-- Estilos y Librerías -->
+        <link rel="stylesheet" href="/static/css/styles.css">
         <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
         <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
         <script src="https://cdn.datatables.net/1.13.1/js/jquery.dataTables.min.js"></script>
         <link rel="stylesheet" href="https://cdn.datatables.net/1.13.1/css/jquery.dataTables.min.css">
         <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
-        <style>
-            /* General */
-            body {
-                background-color: #121212;
-                color: #e0e0e0;
-                font-family: 'Roboto', sans-serif;
-                margin: 0;
-                padding: 0;
-            }
-    
-            h1 {
-                color: #00ccff;
-                margin-top: 20px;
-                text-align: center;
-                font-size: 2.5em;
-                text-shadow: 1px 1px 12px #007399;
-            }
-    
-            .container {
-                width: 90%;
-                margin: 20px auto;
-                background-color: #1e1e1e;
-                border-radius: 10px;
-                padding: 20px;
-                box-shadow: 0 4px 10px rgba(0, 0, 0, 0.7);
-            }
-    
-            .controls {
-                display: flex;
-                justify-content: space-around;
-                align-items: center;
-                margin-bottom: 20px;
-                flex-wrap: wrap;
-            }
-    
-            .controls label {
-                font-size: 1.2em;
-                margin-right: 10px;
-                color: #00ccff;
-            }
-    
-            .controls input[type="date"] {
-                padding: 10px;
-                border-radius: 5px;
-                border: 1px solid #333;
-                background-color: #1b1b1b;
-                color: #e0e0e0;
-                font-size: 1em;
-            }
-    
-            button {
-                padding: 10px 20px;
-                font-size: 1.2em;
-                border: none;
-                border-radius: 5px;
-                cursor: pointer;
-                background-color: #00ccff;
-                color: #1e1e1e;
-                transition: all 0.3s ease;
-                box-shadow: 0 4px 8px rgba(0, 204, 255, 0.3);
-            }
-    
-            button:hover {
-                background-color: #007399;
-                color: white;
-            }
-    
-            /* Tabla */
-            table {
-                table-layout: fixed;
-                width: 100%;
-                border-collapse: collapse;
-                margin-top: 20px;
-            }
-    
-            table th, table td {
-                padding: 10px;
-                text-align: left;
-                border: 1px solid #333;
-                vertical-align: middle;
-                white-space: nowrap;
-                overflow: hidden;
-                text-overflow: ellipsis;
-            }
-    
-            table th.limited, table td.limited {
-                max-width: 150px;
-                width: 150px;
-            }
-    
-            /* Tooltip */
-            table td.limited:hover::after {
-                content: attr(data-fulltext);
-                position: absolute;
-                background-color: #333;
-                color: #fff;
-                padding: 5px;
-                border-radius: 5px;
-                white-space: normal;
-                z-index: 10;
-                max-width: 300px;
-                box-shadow: 0 4px 8px rgba(0, 0, 0, 0.7);
-            }
-    
-            /* Estilo para Search y Show Entries */
-            .dataTables_filter input, .dataTables_length select {
-                background-color: #1b1b1b;
-                color: #e0e0e0;
-                border: 1px solid #333;
-                padding: 5px;
-                border-radius: 5px;
-            }
-    
-            .dataTables_filter input:focus, .dataTables_length select:focus {
-                outline: none;
-                border-color: #00ccff;
-                box-shadow: 0 0 5px rgba(0, 204, 255, 0.8);
-            }
-    
-            /* Gráfico */
-            #chart {
-                margin-top: 40px;
-            }
-    
-            /* Footer */
-            .footer {
-                text-align: center;
-                margin-top: 40px;
-                color: #757575;
-                font-size: 0.9em;
-            }
-        </style>
     </head>
     
 <body>
@@ -163,7 +32,7 @@
             <button id="download-csv"><i class="fas fa-download"></i> Descargar CSV</button>
         </div>
         <div id="loading-spinner" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.5); z-index: 9999; display: flex; align-items: center; justify-content: center;">
-            <div style="border: 6px solid #f3f3f3; border-top: 6px solid #00ccff; border-radius: 50%; width: 50px; height: 50px; animation: spin 1s linear infinite;"></div>
+            <div style="border: 6px solid #f3f3f3; border-top: 6px solid #5a8bba; border-radius: 50%; width: 50px; height: 50px; animation: spin 1s linear infinite;"></div>
         </div>
         
         <style>
@@ -210,7 +79,7 @@
         <br><br>
         Developed by HFM Test Department.
         <br><br>
-        <a href="mailto:moises.ramirez1@molex.com" style="color: #00ccff; text-decoration: none;">Contacto</a>
+        <a href="mailto:moises.ramirez1@molex.com" style="color: #5a8bba; text-decoration: none;">Contacto</a>
     </div>
     
 

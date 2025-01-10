@@ -2,30 +2,20 @@ const socket = io.connect('http://' + document.domain + ':' + location.port);
 
 // Configuración del gráfico de barras
 let layout = {
+    plot_bgcolor: "#f9f9f9", // Fondo blanco para gráficos
+    paper_bgcolor: "#efefef", // Fondo gris claro para todo
+    font: { color: "#555555" }, // Texto gris oscuro
     title: {
-        text: "",
-        font: { color: "#00ccff", size: 24 },
+        font: { color: "#5a8bba" } // Azul cielo suave para títulos
     },
     xaxis: {
-        title: "",
-        color: "white",
-        titlefont: { color: "#00ccff", size: 16 },
-        //tickfont: { color: "white", size: 14, family: "Arial, sans-serif", weight: "bold" } // Negrita en labels
+        color: "#555555",
+        titlefont: { color: "#5a8bba" }
     },
     yaxis: {
-        title: "Yield (%)",
-        range: [0, 100], // Rango de barras sin necesidad de expandir
-        color: "white",
-        tickfont: { color: "white", size: 12 },
-        titlefont: { color: "#00ccff", size: 16 },
-    },
-    plot_bgcolor: "#1b1b1b",
-    paper_bgcolor: "#1b1b1b",
-    font: { color: "white" },
-    showlegend: false,
-    bargap: 0.3,
-    height: 600, // Altura ajustada
-    margin: { t: 50, b: 100 } // Espacio inferior para Gauges
+        color: "#555555",
+        titlefont: { color: "#5a8bba" }
+    }
 };
 
 let data = [{
@@ -138,12 +128,13 @@ socket.on('update_data', (receivedData) => {
 
         // Asignar colores según el yield
         if (item.yield >= 95) {
-            colors.push("rgba(60,179,113,0.9)");
+            colors.push("rgba(168, 213, 186, 0.9)"); // Verde pastel
         } else if (item.yield >= 90) {
-            colors.push("rgba(255,223,0,0.9)");
+            colors.push("rgba(255, 228, 161, 0.9)"); // Amarillo suave
         } else {
-            colors.push("rgba(255,99,71,0.9)");
+            colors.push("rgba(247, 168, 168, 0.9)"); // Rojo claro
         }
+        
 
         // Etiquetas con datos adicionales
         let labelText = `Yield: ${item.yield.toFixed(2)}%\n<br>Pasa: ${item.passed}\n<br>Falla: ${item.failed}`;
@@ -171,19 +162,20 @@ socket.on('update_data', (receivedData) => {
             value: item.oee * 100,
             title: { 
                 text: "OEE", // Puedes incluir texto aquí si lo necesitas
-                font: { size: 20, color: "white" } // Reducir tamaño del título
+                font: { size: 20, color: "black" } // Reducir tamaño del título
             },
             number: { 
                 suffix: "%" // Agregar el símbolo de porcentaje
             },
             gauge: {
-                axis: { range: [0, 100], tickwidth: 1, tickcolor: "white" },
-                bar: { color: "rgba(60,179,113,0.9)" },
+                axis: { range: [0, 100], tickwidth: 1, tickcolor: "black" },
+                bar: { color: "rgba(114, 196, 149, 0.9)" },
                 steps: [
-                    { range: [0, 50], color: "rgba(255,99,71,0.9)" },
-                    { range: [50, 75], color: "rgba(255,223,0,0.9)" },
-                    { range: [75, 100], color: "rgba(60,179,113,0.9)" }
+                    { range: [0, 50], color: "rgba(255,126,99,0.9)" }, // Rojo intermedio pastel
+                    { range: [50, 75], color: "rgba(255,231,64,0.9)" }, // Amarillo intermedio pastel
+                    { range: [75, 100], color: "rgba(114,196,149,0.9)" } // Verde intermedio pastel
                 ]
+            
             },
             domain: { 
                 x: [index / receivedData.length, (index + 1) / receivedData.length], // Distribuir horizontalmente
@@ -218,7 +210,7 @@ socket.on('reset_activity_monitor', () => {
     actualizarGraficos();
 });
 
-// Actualizar gráficos secundarios
+// Actualizar gráficos secundarios                                              aqui aparecen centrado el grafico de pulsos
 const actualizarGraficos = () => {
     let uniqueFALines = Object.keys(pulseHistoryX).sort().reverse();
     let yPositions = uniqueFALines.map((_, index) => index);
@@ -226,15 +218,25 @@ const actualizarGraficos = () => {
     if (uniqueFALines.length === 0) {
         Plotly.react("pulse_chart", [], {
             title: "",
-            xaxis: { title: "", color: "white" },
-            yaxis: { title: "FA Lines", color: "white" },
-            plot_bgcolor: "#1b1b1b",
-            paper_bgcolor: "#1b1b1b",
-            font: { color: "white" },
+            xaxis: { 
+                title: "", 
+                color: "black", // Texto negro
+                tickfont: { color: "black", size: 12 } // Fuente negra para ticks
+            },
+            yaxis: { 
+                title: "FA Lines", 
+                color: "black", // Texto negro
+                tickfont: { color: "black", size: 12 }, // Fuente negra para ticks
+                titlefont: { color: "#007399", size: 16 } // Azul cielo suave para títulos
+            },
+            plot_bgcolor: "#efefef;", // Fondo gris claro
+            paper_bgcolor: "#ffffff", // Fondo blanco
+            font: { color: "black" }, // Fuente negra
             showlegend: false
         });
         return;
     }
+    
 
     let pulseData = uniqueFALines.map((faLine, index) => ({
         x: pulseHistoryX[faLine],
@@ -242,20 +244,20 @@ const actualizarGraficos = () => {
         mode: 'lines+markers',
         line: { 
             shape: 'hv', 
-            width: 2, 
+            width: 5, 
             color: pulseHistoryY[faLine][pulseHistoryY[faLine].length - 1] === 1 
-                ? 'rgba(60,179,113,0.9)' 
-                : 'rgba(255,99,71,0.9)' 
+                ? 'rgba(114,196,149,0.9)' // Verde oscuro para línea activa(114,196,149,0.9)
+                : 'rgba(247,168,168,0.9)' // Rojo para línea inactiva(255,126,99,0.9)"rgba(247, 168, 168, 0.9)"
         },
         marker: { 
             size: 6,
-            color: pulseHistoryY[faLine].map(state => state === 1 ? 'rgba(60,179,113,0.9)' : 'rgba(255,99,71,0.9)'),
+            color: pulseHistoryY[faLine].map(state => state === 1 ? 'rgba(114,196,149,0.9)' : 'rgba(255,126,99,0.9)'), // Verde o rojo
         },
-        text: pulseHistoryY[faLine].map(state => state === 1 ? "Linea Activa" : "Linea Inactiva"),
-        //hovertemplate: '<b>FA Line: %{text}</b><br>Estado: %{text}<extra></extra>',
+        text: pulseHistoryY[faLine].map(state => state === 1 ? "Línea Activa" : "Línea Inactiva"),
         hovertemplate: '%{text}<extra></extra>',
         name: faLine
     }));
+    
 
     let annotations = uniqueFALines.map((faLine, index) => ({
         x: 1,
@@ -266,36 +268,36 @@ const actualizarGraficos = () => {
         yanchor: "middle",
         text: `${formatTime(inactiveTimeByLine[faLine])}`,
         showarrow: false,
-        font: { size: 12, color: "white" },
+        font: { size: 12, color: "black" }, // Texto negro
         align: "left"
-    }));
+    }));    
 
     let pulseLayout = {
         title: "",
         xaxis: { 
             title: "", 
-            color: "white" 
+            color: "black",
+            tickfont: { color: "black", size: 12 }
         },
         yaxis: { 
             title: "FA Lines", 
             tickvals: yPositions, 
             ticktext: uniqueFALines, 
-            color: "white",
-            tickfont: { color: "white", size: 12 },
-            titlefont: { color: "#00ccff", size: 16 }
+            color: "black",
+            tickfont: { color: "black", size: 14, weight: "bold" },
+            titlefont: { color: "#007399", size: 16 }
         },
         annotations,
-        margin: {
-            t: 50,
-            r: 150,
-            b: 150,
-            l: 50
-        },
-        plot_bgcolor: "#1b1b1b",
-        paper_bgcolor: "#1b1b1b",
-        font: { color: "white" },
-        showlegend: false
+        plot_bgcolor: "#ffffff", // Fondo blanco para gráficos
+        paper_bgcolor: "#efefef", // Fondo gris claro para todo
+        font: { color: "black" },
+        showlegend: false,
+        height: 500, // Altura fija
+        //width: 800,  // Ancho fijo
+        autosize: true, // Desactiva ajuste automático
+        margin: { t: 50, r: 50, b: 50, l: 50 } // Márgenes constantes
     };
+    
 
     Plotly.react("pulse_chart", pulseData, pulseLayout, { transition: { duration: 300 } });
 };

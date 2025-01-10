@@ -6,46 +6,19 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>FA Health Monitor</title>
     <!-- Estilos y Librerías -->
+    <link rel="stylesheet" href="/static/css/styles.css">
     <script src="/static/js/plotly-latest.min.js"></script>
     <script src="/static/js/socket.io.min.js"></script>
-
-    <style>
-        body {
-            background-color: #1b1b1b;
-            color: white;
-            font-family: Arial, sans-serif;
-            text-align: center;
-            margin: 0;
-            padding: 0;
-        }
-        h1 {
-            color: #00ccff;
-            margin: 20px 0;
-            font-size: 2em;
-            text-shadow: 1px 1px 8px #007399;
-        }
-        h3 {
-            color: #00ccff;
-            visibility: visible;
-            margin-top: 20px;
-            font-size: 2em;
-            text-shadow: 1px 1px 8px #007399;
-        }
-        #chart {
-            width: 90%;
-            height: 500px;
-            margin: 0 auto;
-        }
-    </style>
+    <script src="/static/js/jquery-3.5.1.min.js"></script>
 </head>
 <body>
-    <h1>Monitoreo de OEE en Tiempo Real</h1>
+    <h1>Monitoreo de POEE en Tiempo Real</h1>
     <div id="chart"></div>
-    <h3 style="margin-top: 100px;">Tiempo de Inactividad</h3>
-    <div id="pulse_chart" style="width:100%;height:500px;"></div>
+    <h2 style="margin-top: 100px;">Tiempo de Inactividad</h2>
+    <div id="pulse_chart"></div>
     <div style="margin-top: 20px;">
         <a href="/historico" style="text-decoration: none;">
-            <button style="background-color: #00ccff; color: white; padding: 10px 20px; border: none; border-radius: 5px; font-size: 16px; cursor: pointer;">Histórico</button>
+            <button style="background-color: #5a8bba; color: white; padding: 10px 20px; border: none; border-radius: 5px; font-size: 16px; cursor: pointer;">Histórico</button>
         </a>
     </div>
     <div class="footer" style="text-align: center; margin-top: 40px; color: #757575; font-size: 0.9em;">
@@ -53,7 +26,7 @@
         <br><br>
         Developed by HFM Test Department.
         <br><br>
-        <a href="mailto:moises.ramirez1@molex.com" style="color: #00ccff; text-decoration: none;">Contacto</a>
+        <a href="mailto:moises.ramirez1@molex.com" style="color: #5a8bba; text-decoration: none;">Contacto</a>
     </div>
     
     <script src="/static/app.js"></script>

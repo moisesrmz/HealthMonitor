@@ -1,0 +1,148 @@
+/* Estilos generales */
+body {
+    background-color: #e5e5e5; /* Fondo gris medio */
+    color: #555555; /* Texto gris oscuro */
+    font-family: Arial, sans-serif;
+    margin: 0;
+    padding: 0;
+    text-align: center; /* Centrar el texto por defecto */
+}
+
+h1, h2 {
+    color: #5a8bba; /* Azul cielo suave */
+    margin: 20px auto; /* Asegura el centrado horizontal */
+    text-align: center; /* Centrar texto */
+    text-shadow: 1px 1px 5px #d1e3f0; /* Sombra ligera */
+}
+
+#chart, #pulse_chart {
+    width: 90%; 
+    height: 500px; 
+    margin: 0 auto;
+    background-color: #ffffff; /* Fondo blanco suave para gráficos */
+    border-radius: 8px; /* Bordes ligeramente redondeados */
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1); /* Sombra ligera */
+}
+
+button {
+    background-color: #5a8bba; /* Azul pastel */
+    color: white;
+    padding: 10px 20px;
+    border: none;
+    border-radius: 5px;
+    font-size: 16px;
+    cursor: pointer;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1); /* Sombra ligera */
+}
+
+button:hover {
+    background-color: #4a7ca8; /* Azul pastel más oscuro al pasar el cursor */
+}
+
+.footer {
+    text-align: center;
+    margin-top: 40px;
+    color: #757575; /* Gris medio */
+    font-size: 0.9em;
+}
+
+.footer a {
+    color: #5a8bba; /* Azul cielo suave */
+    text-decoration: none;
+}
+
+.footer a:hover {
+    text-decoration: underline;
+}
+
+/* Estilos adicionales ajustados a tema claro */
+.container {
+    width: 90%;
+    margin: 20px auto;
+    background-color: #ffffff; /* Fondo blanco */
+    border-radius: 10px;
+    padding: 20px;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1); /* Sombra ligera */
+}
+
+.controls {
+    display: flex;
+    justify-content: space-around;
+    align-items: center;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+}
+
+.controls label {
+    font-size: 1.2em;
+    margin-right: 10px;
+    color: #5a8bba; /* Azul cielo suave */
+}
+
+.controls input[type="date"] {
+    padding: 10px;
+    border-radius: 5px;
+    border: 1px solid #ccc; /* Gris claro */
+    background-color: #f9f9f9; /* Fondo claro */
+    color: #555555; /* Texto gris oscuro */
+    font-size: 1em;
+}
+
+.dataTables_filter input, .dataTables_length select {
+    background-color: #ffffff; /* Fondo blanco */
+    color: #555555; /* Texto gris oscuro */
+    border: 1px solid #ccc; /* Borde gris claro */
+    padding: 5px;
+    border-radius: 5px;
+}
+
+.dataTables_filter input:focus, .dataTables_length select:focus {
+    outline: none;
+    border-color: #5a8bba; /* Azul cielo suave */
+    box-shadow: 0 0 5px rgba(90, 139, 186, 0.8); /* Azul claro */
+}
+
+/* Tabla */
+table {
+    table-layout: fixed;
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 20px;
+    background-color: #ffffff; /* Fondo blanco */
+}
+
+table th, table td {
+    padding: 10px;
+    text-align: left;
+    border: 1px solid #ccc; /* Borde gris claro */
+    vertical-align: middle;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    color: #555555; /* Texto gris oscuro */
+}
+
+table th.limited, table td.limited {
+    max-width: 150px;
+    width: 150px;
+}
+
+/* Tooltip */
+table td.limited:hover::after {
+    content: attr(data-fulltext);
+    position: absolute;
+    background-color: #ffffff; /* Fondo blanco */
+    color: #555555; /* Texto gris oscuro */
+    padding: 5px;
+    border-radius: 5px;
+    white-space: normal;
+    z-index: 10;
+    max-width: 300px;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1); /* Sombra ligera */
+    border: 1px solid #ccc; /* Borde gris claro */
+}
+
+/* Gráfico */
+#chart {
+    margin-top: 40px;
+}
