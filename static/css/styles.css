@@ -9,7 +9,7 @@ body {
 }
 
 h1, h2 {
-    color: #5a8bba; /* Azul cielo suave */
+    color: #555555; /* Azul cielo suave */
     margin: 20px auto; /* Asegura el centrado horizontal */
     text-align: center; /* Centrar texto */
     text-shadow: 1px 1px 5px #d1e3f0; /* Sombra ligera */
@@ -25,7 +25,7 @@ h1, h2 {
 }
 
 button {
-    background-color: #5a8bba; /* Azul pastel */
+    background-color: #555555; /* Azul pastel */
     color: white;
     padding: 10px 20px;
     border: none;
@@ -47,7 +47,7 @@ button:hover {
 }
 
 .footer a {
-    color: #5a8bba; /* Azul cielo suave */
+    color: #555555; /* Azul cielo suave */
     text-decoration: none;
 }
 
@@ -76,7 +76,7 @@ button:hover {
 .controls label {
     font-size: 1.2em;
     margin-right: 10px;
-    color: #5a8bba; /* Azul cielo suave */
+    color: #555555; /* Azul cielo suave */
 }
 
 .controls input[type="date"] {
@@ -98,7 +98,7 @@ button:hover {
 
 .dataTables_filter input:focus, .dataTables_length select:focus {
     outline: none;
-    border-color: #5a8bba; /* Azul cielo suave */
+    border-color: #555555; /* Azul cielo suave */
     box-shadow: 0 0 5px rgba(90, 139, 186, 0.8); /* Azul claro */
 }
 

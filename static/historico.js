@@ -127,7 +127,7 @@ function updateChart(data) {
     const layout = {
         title: {
             text: "",
-            font: { color: "#5a8bba", size: 24 }, // Azul pastel
+            font: { color: "#555555", size: 24 }, // Azul pastel
         },
         xaxis: {
             title: "",
