@@ -17,7 +17,7 @@ h1, h2 {
 
 #chart, #pulse_chart {
     width: 90%; 
-    height: 500px; 
+    height: 550px; 
     margin: 0 auto;
     background-color: #ffffff; /* Fondo blanco suave para gráficos */
     border-radius: 8px; /* Bordes ligeramente redondeados */
