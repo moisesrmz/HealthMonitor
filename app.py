@@ -93,11 +93,12 @@ def calculate_oee(line, ideal_cycle_time=10):
     adjusted_elapsed_time = max(0, elapsed_time - proportional_break_time)
     line_label = folder_labels.get(line, line)
     inactive_time = pulse_history_data["inactiveTimeByLine"].get(line_label, 0)
-    operational_time = max(0, adjusted_elapsed_time - inactive_time)
+    adjusted_inactive_time = max(0, inactive_time - proportional_break_time)
+    operational_time = max(0, adjusted_elapsed_time - adjusted_inactive_time)
     good_pieces = pass_fail_counts[line].get("Passed", 0)
     total_pieces = pass_fail_counts[line].get("Passed", 0) + pass_fail_counts[line].get("Failed", 0)
     if adjusted_elapsed_time > 0:
-        availability = (adjusted_elapsed_time - inactive_time) / adjusted_elapsed_time
+        availability = (adjusted_elapsed_time - adjusted_inactive_time) / adjusted_elapsed_time
     else:
         availability = 0
     if good_pieces == 0 or operational_time == 0:
@@ -116,7 +117,7 @@ def calculate_oee(line, ideal_cycle_time=10):
     #print(f"[INFO] Tiempo de Comedor Proporcional: {proportional_break_time:.2f}s")
     #print(f"[INFO] Tiempo Ajustado: {adjusted_elapsed_time:.2f}s")
     print(f"[INFO] Producción Real: {good_pieces}")
-    print(f"[INFO] Tiempo Inactivo: {inactive_time:.2f}s")
+    print(f"[INFO] Tiempo Inactivo: {adjusted_inactive_time:.2f}s")
     print(f"[INFO] Tiempo Operativo: {operational_time:.2f}s")
     print(f"[INFO] Performance: {performance:.2%}")
     #print(f"[INFO] Piezas Totales: {total_pieces}")
@@ -131,7 +132,7 @@ def calculate_oee(line, ideal_cycle_time=10):
         "elapsed_time": elapsed_time,
         "proportional_break_time": proportional_break_time,
         "adjusted_elapsed_time": adjusted_elapsed_time,
-        "inactive_time": inactive_time,
+        "inactive_time": adjusted_inactive_time,
         "operational_time": operational_time,
         "good_pieces": good_pieces,
         "total_pieces": total_pieces,
@@ -455,9 +456,10 @@ def save_kpis_before_reset():
         print(f"[DEBUG] Etiqueta de línea para {line}: {line_label}")
 
         inactive_time = max(0, pulse_history_data["inactiveTimeByLine"].get(line_label, 0))
-        print(f"[DEBUG] Tiempo inactivo para la línea {line}: {inactive_time:.2f} segundos")
+        adjusted_inactive_time = max(0, inactive_time - proportional_break_time)
+        print(f"[DEBUG] Tiempo inactivo para la línea {line}: {adjusted_inactive_time:.2f} segundos")
 
-        operational_time = max(0, adjusted_elapsed_time - inactive_time)
+        operational_time = max(0, adjusted_elapsed_time - adjusted_inactive_time)
         print(f"[DEBUG] Tiempo operativo para la línea {line}: {operational_time:.2f} segundos")
 
         # KPIs
@@ -469,7 +471,7 @@ def save_kpis_before_reset():
 
         # Disponibilidad
         if adjusted_elapsed_time > 0:
-            availability = max(0, min((adjusted_elapsed_time - inactive_time) / adjusted_elapsed_time, 1)) * 100
+            availability = max(0, min((adjusted_elapsed_time - adjusted_inactive_time) / adjusted_elapsed_time, 1)) * 100
         else:
             availability = 0
         print(f"[DEBUG] Disponibilidad (Availability) para la línea {line}: {availability:.2f}%")

@@ -6,15 +6,15 @@ let layout = {
     paper_bgcolor: "#efefef", // Fondo gris claro para todo
     font: { color: "#555555" }, // Texto gris oscuro
     title: {
-        font: { color: "#5a8bba" } // Azul cielo suave para títulos
+        font: { color: "#555555" } // Azul cielo suave para títulos
     },
     xaxis: {
         color: "#555555",
-        titlefont: { color: "#5a8bba" }
+        titlefont: { color: "#555555" }
     },
     yaxis: {
         color: "#555555",
-        titlefont: { color: "#5a8bba" }
+        titlefont: { color: "#555555" }
     }
 };
 
@@ -138,7 +138,7 @@ socket.on('update_data', (receivedData) => {
 
         // Etiquetas con datos adicionales
         let labelText = `Yield: ${item.yield.toFixed(2)}%\n<br>Pasa: ${item.passed}\n<br>Falla: ${item.failed}`;
-        labelText += `\n<br><br>Disponibilidad: ${(item.availability * 100).toFixed(2)}%`;
+        labelText += `\n<br>Disponibilidad: ${(item.availability * 100).toFixed(2)}%`;
         labelText += `\n<br>Rendimiento: ${(item.performance * 100).toFixed(2)}%`;
         if (item.reference && item.reference !== "N/A") {
             labelText += `\n<br><br>NP: ${item.reference}`;
@@ -161,8 +161,8 @@ socket.on('update_data', (receivedData) => {
             mode: "gauge+number",
             value: item.oee * 100,
             title: { 
-                text: "OEE", // Puedes incluir texto aquí si lo necesitas
-                font: { size: 20, color: "black" } // Reducir tamaño del título
+                text: "POEE", // Puedes incluir texto aquí si lo necesitas
+                font: { size: 20, color: "#555555" } // Reducir tamaño del título
             },
             number: { 
                 suffix: "%" // Agregar el símbolo de porcentaje
@@ -295,7 +295,7 @@ const actualizarGraficos = () => {
         height: 500, // Altura fija
         //width: 800,  // Ancho fijo
         autosize: true, // Desactiva ajuste automático
-        margin: { t: 50, r: 50, b: 50, l: 50 } // Márgenes constantes
+        margin: { t: 50, r: 100, b: 50, l: 50 } // Márgenes constantes
     };
     
 
