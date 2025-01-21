@@ -1,35 +1,256 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <link rel="icon" href="/static/images/favicon.ico" type="image/x-icon">
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>FA Health Monitor</title>
-    <!-- Estilos y Librerías -->
-    <link rel="stylesheet" href="/static/css/styles.css">
+    <title>FA Line Monitor</title>
     <script src="/static/js/plotly-latest.min.js"></script>
     <script src="/static/js/socket.io.min.js"></script>
-    <script src="/static/js/jquery-3.5.1.min.js"></script>
 </head>
 <body>
-    <h1>Monitoreo de POEE en Tiempo Real</h1>
-    <div id="chart"></div>
-    <h2 style="margin-top: 100px;">Tiempo de Inactividad</h2>
-    <div id="pulse_chart"></div>
-    <div style="margin-top: 20px;">
-        <a href="/historico" style="text-decoration: none;">
-            <button style="background-color: #555555; color: white; padding: 10px 20px; border: none; border-radius: 5px; font-size: 16px; cursor: pointer;">Histórico</button>
-        </a>
+    <h1>Monitor de Líneas FA</h1>
+    <div class="grid-container">
+        <div class="column">
+            {% for i in range(1, 6) %}
+            <div class="fa-line" id="fa-line-{{ i }}">
+                <div class="gauge" id="gauge-{{ i }}"></div>
+                <div class="indicators">
+                    <h2>F{{ i }}</h2>
+                    <div class="indicator-column">
+                        <div>
+                            <p><strong>Yield:</strong> <span id="yield-{{ i }}">0%</span></p>
+                            <p><strong>Disponibilidad:</strong> <span id="availability-{{ i }}">0%</span></p>
+                            <p><strong>Rendimiento:</strong> <span id="performance-{{ i }}">0%</span></p>
+                        </div>
+                        <div>
+                            <p><strong>Tiempo Transcurrido:</strong> <span id="elapsed-time-{{ i }}">0s</span></p>
+                            <p><strong>Tiempo Inactivo:</strong> <span id="inactive-{{ i }}">0s</span></p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        <div class="column">
+            {% for i in range(6, 11) %}
+            <div class="fa-line" id="fa-line-{{ i }}">
+                <div class="gauge" id="gauge-{{ i }}"></div>
+                <div class="indicators">
+                    <h2>F{{ i }}</h2>
+                    <div class="indicator-column">
+                        <div>
+                            <p><strong>Yield:</strong> <span id="yield-{{ i }}">0%</span></p>
+                            <p><strong>Disponibilidad:</strong> <span id="availability-{{ i }}">0%</span></p>
+                            <p><strong>Rendimiento:</strong> <span id="performance-{{ i }}">0%</span></p>
+                        </div>
+                        <div>
+                            <p><strong>Tiempo Transcurrido:</strong> <span id="elapsed-time-{{ i }}">0s</span></p>
+                            <p><strong>Tiempo Inactivo:</strong> <span id="inactive-{{ i }}">0s</span></p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
     </div>
-    <div class="footer" style="text-align: center; margin-top: 40px; color: #757575; font-size: 0.9em;">
-        &copy; 2025 FA Health Monitor.
-        <br><br>
-        Developed by HFM Test Department.
-        <br><br>
-        <a href="mailto:moises.ramirez1@molex.com" style="color: #5a8bba; text-decoration: none;">Contacto</a>
-    </div>
-    
-    <script src="/static/app.js"></script>
-</body>
 
+    <style>
+        body {
+            margin: 0;
+            font-family: Arial, sans-serif;
+            background-color: #f4f4f4;
+            color: #333;
+        }
+
+        h1 {
+            text-align: center;
+            margin: 0px 0;
+        }
+
+        .grid-container {
+            display: flex;
+            justify-content: center;
+            padding: 10px;
+            gap: 0px; /* Espaciado entre columnas */
+        }
+
+        .column {
+            display: flex;
+            flex-direction: column;
+            gap: 10px; /* Espaciado entre filas */
+            width: 45%; /* Ajusta el ancho de cada columna */
+        }
+
+        .fa-line {
+            display: flex;
+            align-items: center;
+            /*justify-content: space-between;*/
+            justify-content: flex-start;
+            background-color: #f4f4f4;
+            padding: 10px;
+            border-radius: 20px;
+            box-shadow: 0 0 20px rgba(255,99,71,0.9);
+            width: 90%;
+            height: 135px; /* Ajuste de altura general */
+            margin-bottom:20px
+        }
+
+        .gauge {
+            width: 40%; /* Aumenta el ancho del gauge para que ocupe más espacio */
+            height: 100%; /* Ajusta la altura del gauge para usar todo el espacio del contenedor */
+            display: flex; /* Habilita flexbox para alinear contenido */
+            justify-content: center; /* Centra horizontalmente */
+            align-items: center; /* Centra verticalmente */
+            overflow: visible; /* Evita que contenido sobrante se vea */
+        }
+
+
+        .indicators {
+            width: 58%; /* Espacio para los indicadores */
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            gap: 5px;
+        }
+
+        h2 {
+            font-size: 1.1em; /* Ajusta el tamaño del título */
+            margin: 0 0 5px 0;
+        }
+
+        p {
+            margin: 0;
+            font-size: 0.85em; /* Tamaño ajustado del texto */
+        }
+        .indicator-column {
+            display: grid;  /* Cambiar flex a grid para organizar columnas */
+            grid-template-columns: 1fr 1fr;  /* Crear dos columnas de tamaño igual */
+            justify-content: start;  /* Alinear el contenido a la izquierda */
+            align-items: start;  /* Alinear verticalmente al inicio */
+            gap: 0px;  /* Espaciado entre columnas */
+        }
+
+        .fa-line.active {
+            box-shadow: 0 0 20px rgba(60,179,113,0.9);
+        }
+
+        .fa-line.inactive {
+            box-shadow: 0 0 20px rgba(255,99,71,0.9);
+        }
+    </style>
+
+    <script>
+        const socket = io.connect('http://' + document.domain + ':' + location.port);
+
+        // Inicializar gauges y actualizar datos
+        const gauges = {};
+
+        for (let i = 1; i <= 10; i++) {
+            Plotly.newPlot(`gauge-${i}`, [{
+                type: "indicator",
+                mode: "gauge+number",
+                value: 0,
+                title: { text: "", font: { size: 12 }, position: "top center" },
+                number: {
+                    suffix: "%" // Agrega el símbolo % al valor mostrado
+                },
+                gauge: {
+                    axis: {
+                        range: [0, 100], // Escala fija de 0 a 100
+                        tickvals: [0, 100], // Mostrar solo los valores 0 y 100
+                        ticktext: ["0", "100"], // Etiquetas correspondientes
+                        tickfont: { size: 10 } // Tamaño de fuente de las etiquetas
+                    },
+                    steps: [
+                        { range: [0, 100], color: "rgba(200, 200, 200, 0.5)" } // Fondo gris siempre visible
+                    ],
+                    bar: { color: "rgba(168, 213, 186, 0.9)" } // Color inicial de la barra
+                }
+            }], {
+                width: 220,
+                height: 100,
+                margin: { t: 10, r: 10, l: 10, b: 10 },
+                paper_bgcolor: "#f4f4f4" // Establecer el color de fondo
+            });
+
+            gauges[`gauge-${i}`] = {
+                id: `gauge-${i}`,
+                currentColor: "rgba(168, 213, 186, 0.9)", // Color inicial
+                value: 0 // Valor inicial
+            };
+        }
+
+        socket.on('update_data', (data) => {
+            data.forEach((item) => {
+                const lineNumber = parseInt(item.label.slice(1));
+                const oeeValue = item.oee * 100;
+
+                // Actualizar texto de indicadores
+                //document.getElementById(`yield-${lineNumber}`).innerText = `${item.yield.toFixed(2)}%`;
+                //document.getElementById(`goods-${lineNumber}`).innerText = item.passed;
+                //document.getElementById(`bads-${lineNumber}`).innerText = item.failed;
+                //document.getElementById(`availability-${lineNumber}`).innerText = `${(item.availability * 100).toFixed(2)}%`;
+                //document.getElementById(`performance-${lineNumber}`).innerText = `${(item.performance * 100).toFixed(2)}%`;
+                //document.getElementById(`inactive-${lineNumber}`).innerText = `${formatTime(item.inactive_time)}`;
+                document.getElementById(`yield-${lineNumber}`).innerText = `${item.yield.toFixed(2)}%`;
+                document.getElementById(`availability-${lineNumber}`).innerText = `${(item.availability * 100).toFixed(2)}%`;
+                document.getElementById(`performance-${lineNumber}`).innerText = `${(item.performance * 100).toFixed(2)}%`;
+                document.getElementById(`elapsed-time-${lineNumber}`).innerText = `${formatTime(item.elapsed_time)}`;
+                document.getElementById(`inactive-${lineNumber}`).innerText = `${formatTime(item.inactive_time)}`;
+
+
+                // Determinar color dinámico basado en el valor de OEE
+                let barColor;
+                if (oeeValue <= 50) {
+                    barColor = "rgba(255, 126, 99, 0.9)"; // Pastel rojo
+                } else if (oeeValue <= 75) {
+                    barColor = "rgba(255, 231, 64, 0.9)"; // Pastel amarillo
+                } else {
+                    barColor = "rgba(114, 196, 149, 0.9)"; // Pastel verde
+                }
+
+                // Actualizar el gauge sin cambiar la escala ni el fondo
+                Plotly.update(`gauge-${lineNumber}`, {
+                    value: [oeeValue],
+                    gauge: {
+                        bar: { color: barColor }, // Actualizar solo el color de la barra
+                        axis: {
+                            range: [0, 100], // Asegurar escala fija
+                            tickvals: [0, 100], // Mostrar solo 0 y 100
+                            ticktext: ["0", "100"] // Etiquetas correspondientes
+                        },
+                        steps: [
+                            { range: [0, 100], color: "rgba(200, 200, 200, 0.5)" } // Fondo gris estático
+                        ]
+                    },
+                    number: {
+                        suffix: "%" // Agrega el símbolo % al valor dinámico
+                    }
+                });
+                const lineElement = document.getElementById(`fa-line-${lineNumber}`);
+                if (item.state === 1) {
+                    lineElement.classList.add('active');
+                    lineElement.classList.remove('inactive');
+                } else {
+                    lineElement.classList.add('inactive');
+                    lineElement.classList.remove('active');
+                }
+            });
+        });
+
+        const formatTime = (seconds) => {
+            let hours = Math.floor(seconds / 3600);
+            let minutes = Math.floor((seconds % 3600) / 60);
+            let secs = Math.floor(seconds % 60);
+            return `${hours}h ${minutes}m ${secs}s`;
+        };
+    </script>
+
+
+
+
+
+
+    
+</body>
 </html>

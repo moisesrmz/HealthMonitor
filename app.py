@@ -9,14 +9,14 @@ from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
 from collections import defaultdict
 import threading
-from threading import Timer
 from database_operations import insert_test_result
 from database_operations import fetch_historico_data
 from database_operations import insert_kpi
 
+
 app = Flask(__name__)
 socketio = SocketIO(app)
-last_reset_time = datetime.datetime.now()  # Inicialización al inicio de la app
+last_reset_time = datetime.datetime.now()
 pass_fail_counts = defaultdict(lambda: {"Passed": 0, "Failed": 0, "Reference": "", "Test Name": "", "Nombre de la prueba": ""})
 folder_labels = {
     "P2": "F3",
@@ -30,131 +30,34 @@ folder_labels = {
 counts_lock = threading.Lock()
 cycle_times = defaultdict(list)
 last_file_times = defaultdict(lambda: None)
-pulse_history_data = {
-    "pulseHistoryX": defaultdict(list),
-    "pulseHistoryY": defaultdict(list),
-    "inactiveTimeByLine": defaultdict(int),
-    "lastUpdateByLine": defaultdict(lambda: 0)
-}
-
-def determine_shift(test_time):
-    # Convertir el tiempo a objeto datetime
-    time_obj = datetime.datetime.strptime(test_time, "%H:%M:%S").time()
-    t1_start = datetime.time(6, 30)
-    t1_end = datetime.time(14, 30)
-    t2_start = datetime.time(14, 30)
-    t2_end = datetime.time(22, 0)
-    t3_start = datetime.time(22, 0)
-    t3_end = datetime.time(6, 30)
-    if t1_start <= time_obj < t1_end:
-        return "T1"
-    elif t2_start <= time_obj < t2_end:
-        return "T2"
-    else:
-        return "T3"
-
-def calculate_cycle_time(line, timestamp):
-    last_time = last_file_times[line]
-    if last_time is not None:
-        cycle_time = (timestamp - last_time).total_seconds()
-        if cycle_time >= 5.0:  
-            cycle_times[line].append(cycle_time)  
-            print(f"[INFO] Tiempo de ciclo calculado para la línea {line}: {cycle_time:.2f}s")
-            if len(cycle_times[line]) > 25:  #aqui se ajusta la cantidad de tiempos a promediar
-                cycle_times[line].pop(0)
-        else:
-            print(f"[WARN] Tiempo de ciclo descartado para la línea {line} ({cycle_time:.2f}s). Menor a 5 segundos.")
-    else:
-        print(f"[INFO] No hay datos previos para la línea {line}. Esperando más datos.")
-    last_file_times[line] = timestamp
-
-def get_average_cycle_time(line):
-    times = cycle_times[line]
-    if times:
-        avg_time = sum(times) / len(times)
-        return avg_time
-    print(f"[INFO] No hay datos suficientes para calcular el promedio de la línea {line}.")
-    return None
-
-def calculate_oee(line, ideal_cycle_time=10):
-
-    global last_reset_time
-    elapsed_time = (datetime.datetime.now() - last_reset_time).total_seconds()
-    shift_durations = {
-        "T1": 8 * 3600,    # 8 horas en segundos
-        "T2": 7.5 * 3600,  # 7.5 horas en segundos
-        "T3": 8.5 * 3600   # 8.5 horas en segundos
-    }
-    current_time = datetime.datetime.now().strftime("%H:%M:%S")
-    current_shift = determine_shift(current_time) 
-    current_shift_duration = shift_durations[current_shift]
-    break_time = 2100                                           #30 mins de comedor y 5 de ejercicios
-    proportional_break_time = (elapsed_time / current_shift_duration) * break_time
-    adjusted_elapsed_time = max(0, elapsed_time - proportional_break_time)
-    line_label = folder_labels.get(line, line)
-    inactive_time = pulse_history_data["inactiveTimeByLine"].get(line_label, 0)
-    adjusted_inactive_time = max(0, inactive_time - proportional_break_time)
-    operational_time = max(0, adjusted_elapsed_time - adjusted_inactive_time)
-    good_pieces = pass_fail_counts[line].get("Passed", 0)
-    total_pieces = pass_fail_counts[line].get("Passed", 0) + pass_fail_counts[line].get("Failed", 0)
-    if adjusted_elapsed_time > 0:
-        availability = (adjusted_elapsed_time - adjusted_inactive_time) / adjusted_elapsed_time
-    else:
-        availability = 0
-    if good_pieces == 0 or operational_time == 0:
-        performance = 0
-    else:
-        performance = (good_pieces * ideal_cycle_time) / operational_time
-    if total_pieces > 0:
-        quality = good_pieces / total_pieces
-    else:
-        quality = 0
-    oee = availability * performance * quality
-
-    print(f"[INFO] Línea: {line} (Label: {line_label})")
-    #print(f"[INFO] Turno Actual: {current_shift}")
-    print(f"[INFO] Tiempo Total Transcurrido: {elapsed_time:.2f}s")
-    print(f"[INFO] Tiempo de Comedor Proporcional: {proportional_break_time:.2f}s")
-    #print(f"[INFO] Tiempo Ajustado: {adjusted_elapsed_time:.2f}s")
-    print(f"[INFO] Producción Real: {good_pieces}")
-    print(f"[INFO] Tiempo Inactivo: {inactive_time:.2f}s y ajustado: {adjusted_inactive_time:.2f}s")
-    print(f"[INFO] Tiempo Operativo: {operational_time:.2f}s")
-    print(f"[INFO] Performance: {performance:.2%}")
-    #print(f"[INFO] Piezas Totales: {total_pieces}")
-    print(f"[INFO] Availability: {availability:.2%}")
-    print(f"[INFO] Yield: {quality:.2%}")
-    print(f"[INFO] OEE: {oee:.2%}")
-    print(f"*******************************************")
-    return {
-        "line": line,
-        "line_label": line_label,
-        "shift": current_shift,
-        "elapsed_time": elapsed_time,
-        "proportional_break_time": proportional_break_time,
-        "adjusted_elapsed_time": adjusted_elapsed_time,
-        "inactive_time": adjusted_inactive_time,
-        "operational_time": operational_time,
-        "good_pieces": good_pieces,
-        "total_pieces": total_pieces,
-        "availability": availability,
-        "performance": performance,
-        "quality": quality,
-        "oee": oee
-    }
-
 
 class NewFileHandler(FileSystemEventHandler):
     def on_created(self, event):
         if event.is_directory:
             return  
+
         file_path = event.src_path
         parent_folder = os.path.basename(os.path.dirname(file_path))
         print(f"[INFO] Nuevo archivo detectado: {file_path}")
+
+        with counts_lock:
+            line_label = folder_labels.get(parent_folder, "F1")
+
+
         for attempt in range(5):  
             if os.path.exists(file_path):
                 try:
                     timestamp = datetime.datetime.now()
-                    calculate_cycle_time(parent_folder, timestamp) 
+                    calculate_cycle_time(parent_folder, timestamp)
+                    # Calcular el tiempo de ciclo promedio antes de procesar el archivo
+                    oee_data = calculate_oee(parent_folder)
+                    adjusted_elapsed_time = oee_data["adjusted_elapsed_time"]
+
+                    # Agregar el tiempo acumulado para nuevas líneas, si no existe
+                    if parent_folder not in inactivity_accumulated_time:
+                        inactivity_accumulated_time[parent_folder] = adjusted_elapsed_time
+                        print(f"[INFO] Nueva línea detectada: {parent_folder}. Tiempo inicial: {adjusted_elapsed_time:.2f} segundos")
+ 
                     with open(file_path, 'r') as file:
                         lines = file.readlines() 
                     passed, failed = 0, 0
@@ -329,8 +232,14 @@ class NewFileHandler(FileSystemEventHandler):
                     return
             else:
                 time.sleep(0.5)
+# Diccionario para almacenar tiempos de inactividad acumulados por línea
+inactivity_accumulated_time = {}
+inactivity_start_time = {}
+
 def emit_data():
     data = []
+    now = datetime.datetime.now()
+    
     for parent_folder, counts in pass_fail_counts.items():
         if parent_folder[0].isdigit():
             label = "F1"
@@ -341,21 +250,30 @@ def emit_data():
         yield_value = (counts["Passed"] / total_tests) * 100 if total_tests > 0 else 0
         avg_cycle_time = get_average_cycle_time(parent_folder)
         last_time = last_file_times[parent_folder]
-        current_state = 1  # Inicialmente, el estado es "1" (normal)
+        current_state = 1
 
         if avg_cycle_time is None or last_time is None:
             avg_cycle_time = 0
             current_state = 0
         else:
-            now = datetime.datetime.now()
-            if (now - last_time).total_seconds() > avg_cycle_time :#aqui se agrega o quita el tiempo de caida a inactivo
+            if (now - last_time).total_seconds() > avg_cycle_time:
                 current_state = 0
 
-        # Calcular performance y OEE
-        oee_data = calculate_oee(parent_folder, ideal_cycle_time=10)  # Ajustar ideal_cycle_time según tu configuración
+        # Lógica para acumulación de tiempo de inactividad
+        if current_state == 0:
+            if parent_folder not in inactivity_start_time:
+                inactivity_start_time[parent_folder] = now
+            else:
+                # Sumar tiempo acumulado de inactividad desde la última vez que se actualizó
+                elapsed_inactive_time = (now - inactivity_start_time[parent_folder]).total_seconds()
+                inactivity_accumulated_time[parent_folder] = inactivity_accumulated_time.get(parent_folder, 0) + elapsed_inactive_time
+                inactivity_start_time[parent_folder] = now  # Reiniciar el punto de referencia para la próxima iteración
+        else:
+            if parent_folder in inactivity_start_time:
+                del inactivity_start_time[parent_folder]  # Eliminar la marca de inicio cuando vuelva a estar activo
 
-        #print(f"[INFO] Línea: {parent_folder}, OEE: {oee_data['oee']:.2%}, Performance: {oee_data['performance']:.2%}")
-
+        # Calcular métricas OEE
+        oee_data = calculate_oee(parent_folder, ideal_cycle_time=10)
         data.append({
             "label": label,
             "yield": yield_value,
@@ -365,176 +283,140 @@ def emit_data():
             "test_name": counts["Test Name"],
             "nombre_prueba": counts["Nombre de la prueba"],
             "avg_cycle_time": avg_cycle_time,
+            "state": current_state,
             "availability": oee_data["availability"],
             "performance": oee_data["performance"],
+            "quality": oee_data["quality"],
             "oee": oee_data["oee"],
-            "state": current_state
+            "inactive_time": oee_data["adjusted_inactive_time"],
+            "elapsed_time": oee_data["adjusted_elapsed_time"],
         })
 
-    data = sorted(data, key=lambda x: x["label"])
     socketio.emit('update_data', data)
-    data = sorted(data, key=lambda x: x["label"])
-    socketio.emit('update_data', data)
-def reset_scheduler():
-    reset_times = [
-        datetime.time(hour=6, minute=30, second=0),
-        datetime.time(hour=14, minute=30, second=0),
-        datetime.time(hour=22, minute=0, second=0)
-    ]
-    
+
+def calculate_oee(line, ideal_cycle_time=10):
+    global last_reset_time
+    now = datetime.datetime.now()
+    elapsed_time = (now - last_reset_time).total_seconds()
+
+    # Definir duraciones de turno en segundos
+    shift_durations = {
+        "T1": 8 * 3600,  # 8 horas en segundos
+        "T2": 7.5 * 3600,  # 7.5 horas en segundos
+        "T3": 8.5 * 3600   # 8.5 horas en segundos
+    }
+
+    current_time = now.strftime("%H:%M:%S")
+    current_shift = determine_shift(current_time)
+    current_shift_duration = shift_durations[current_shift]
+
+    # Calcular tiempo proporcional de descanso
+    break_time = 2100  # 35 minutos (30 min comedor + 5 min ejercicios)
+    proportional_break_time = (elapsed_time / current_shift_duration) * break_time
+
+    # Calcular tiempo ajustado restando descansos
+    adjusted_elapsed_time = max(0, elapsed_time - proportional_break_time)
+
+    line_label = folder_labels.get(line, line)
+
+    # Obtener tiempo de inactividad acumulado
+    inactive_time = inactivity_accumulated_time.get(line, 0)
+
+    # Ajustar el tiempo de inactividad restando los descansos proporcionales
+    adjusted_inactive_time = max(0, inactive_time - proportional_break_time)
+
+    # Calcular tiempo operativo
+    operational_time = max(0, adjusted_elapsed_time - adjusted_inactive_time)
+
+    # Obtener datos de piezas
+    good_pieces = pass_fail_counts[line].get("Passed", 0)
+    total_pieces = good_pieces + pass_fail_counts[line].get("Failed", 0)
+
+    # Calculo de KPI's
+    availability = (adjusted_elapsed_time - adjusted_inactive_time) / adjusted_elapsed_time if adjusted_elapsed_time > 0 else 0
+    performance = (good_pieces * ideal_cycle_time) / operational_time if good_pieces > 0 and operational_time > 0 else 0
+    quality = good_pieces / total_pieces if total_pieces > 0 else 0
+    oee = availability * performance * quality
+
+    # Depuración de los KPI calculados
+    print(f"[INFO] Línea: {line} (Label: {line_label})")
+    print(f"[INFO] Tiempo Total Transcurrido: {elapsed_time:.2f}s")
+    print(f"[INFO] Tiempo de Comedor Proporcional: {proportional_break_time:.2f}s")
+    print(f"[INFO] Tiempo Ajustado: {adjusted_elapsed_time:.2f}s")
+    print(f"[INFO] Tiempo Inactivo Acumulado: {inactive_time:.2f}s")
+    print(f"[INFO] Tiempo Inactivo Ajustado: {adjusted_inactive_time:.2f}s")
+    print(f"[INFO] Tiempo Operativo: {operational_time:.2f}s")
+    print(f"[INFO] Piezas Buenas: {good_pieces}")
+    print(f"[INFO] Piezas Totales: {total_pieces}")
+    print(f"[INFO] Disponibilidad (Availability): {availability:.2%}")
+    print(f"[INFO] Rendimiento (Performance): {performance:.2%}")
+    print(f"[INFO] Calidad (Quality): {quality:.2%}")
+    print(f"[INFO] OEE: {oee:.2%}")
+    print(f"*******************************************")
+
+    return {
+        "line": line,
+        "line_label": line_label,
+        "shift": current_shift,
+        "elapsed_time": elapsed_time,
+        "proportional_break_time": proportional_break_time,
+        "adjusted_elapsed_time": adjusted_elapsed_time,
+        "inactive_time": inactive_time,
+        "adjusted_inactive_time": adjusted_inactive_time,
+        "operational_time": operational_time,
+        "good_pieces": good_pieces,
+        "total_pieces": total_pieces,
+        "availability": availability,
+        "performance": performance,
+        "quality": quality,
+        "oee": oee
+    }
+
+def determine_shift(test_time):
+    time_obj = datetime.datetime.strptime(test_time, "%H:%M:%S").time()
+    t1_start = datetime.time(6, 30)
+    t1_end = datetime.time(14, 30)
+    t2_start = datetime.time(14, 30)
+    t2_end = datetime.time(22, 0)
+    t3_start = datetime.time(22, 0)
+    t3_end = datetime.time(6, 30)
+    if t1_start <= time_obj < t1_end:
+        return "T1"
+    elif t2_start <= time_obj < t2_end:
+        return "T2"
+    else:
+        return "T3"
+
+def calculate_cycle_time(line, timestamp):
+    last_time = last_file_times[line]
+    if last_time is not None:
+        cycle_time = (timestamp - last_time).total_seconds()
+        if cycle_time >= 5.0:  
+            cycle_times[line].append(cycle_time)  
+            print(f"[INFO] Tiempo de ciclo calculado para la línea {line}: {cycle_time:.2f}s")
+            if len(cycle_times[line]) > 50:  #aqui se ajusta la cantidad de tiempos a promediar
+                cycle_times[line].pop(0)
+        else:
+            print(f"[WARN] Tiempo de ciclo descartado para la línea {line} ({cycle_time:.2f}s). Menor a 5 segundos.")
+    else:
+        print(f"[INFO] No hay datos previos para la línea {line}. Esperando más datos.")
+    last_file_times[line] = timestamp
+
+def get_average_cycle_time(line):
+    times = cycle_times[line]
+    if times:
+        return sum(times) / len(times)
+    return None
+
+def periodic_update(interval=30):
+    """
+    Función para emitir datos cada 'interval' segundos.
+    """
     while True:
-        now = datetime.datetime.now()
-        current_time = now.time()
-        for reset_time in reset_times:
-            if current_time.hour == reset_time.hour and current_time.minute == reset_time.minute:
-                print(f"[INFO] Reinicio programado activado a las {reset_time}")
-                execute_reset()
-                time.sleep(60)  
-        time.sleep(1)  
+        with counts_lock:
+            emit_data()  # Llama a la función que emite los datos
+        time.sleep(interval)
 
-def execute_reset():
-    print("[INFO] Ejecutando reseteo programado")
-    global last_reset_time
-    try:
-        save_kpis_before_reset()
-    except Exception as e:
-        print(f"[ERROR] Error al guardar los KPIs antes del reinicio: {e}")
-
-    last_reset_time = datetime.datetime.now()
-
-    try:
-        reset_counts_and_graph()
-    except Exception as e:
-        print(f"[ERROR] Error al reiniciar los datos y gráficos: {e}")
-
-def save_kpis_before_reset():
-    """
-    Calcula y guarda los KPIs en la base de datos antes de reiniciar los datos.
-    Inserta una fila por cada línea activa en pass_fail_counts.
-    """
-    global last_reset_time
-    print(f"[DEBUG] Valor actual de last_reset_time: {last_reset_time}")  # Depuración del tiempo de reinicio
-    for line, counts in pass_fail_counts.items():
-        # Depuración inicial de datos por línea
-        print(f"[DEBUG] Procesando línea: {line}")
-        print(f"[DEBUG] Datos iniciales para la línea {line}: {counts}")
-
-        total_tests = counts["Passed"] + counts["Failed"]
-        print(f"[DEBUG] Total de pruebas para la línea {line}: {total_tests}")
-
-        # Saltar líneas sin pruebas realizadas
-        if total_tests == 0:
-            print(f"[INFO] Línea {line}: No hay pruebas realizadas, omitiendo.")
-            continue
-
-        # Cálculo del tiempo transcurrido desde el último reinicio
-        elapsed_time = (datetime.datetime.now() - last_reset_time).total_seconds()
-        print(f"[DEBUG] Tiempo transcurrido para la línea {line}: "
-        f"now={datetime.datetime.now()}, last_reset_time={last_reset_time}, "
-        f"elapsed_time={elapsed_time:.2f} segundos")
-
-        shift_durations = {
-            "T1": 8 * 3600,    # 8 horas en segundos
-            "T2": 7.5 * 3600,  # 7.5 horas en segundos
-            "T3": 8.5 * 3600   # 8.5 horas en segundos
-        }
-        current_time = datetime.datetime.now().strftime("%H:%M:%S")
-        current_shift = determine_shift(current_time)
-        print(f"[DEBUG] Turno actual para la línea {line}: {current_shift}")
-
-        current_shift_duration = shift_durations[current_shift]
-        print(f"[DEBUG] Duración del turno {current_shift}: {current_shift_duration} segundos")
-
-        break_time = 1800  # Tiempo de comedor en segundos
-        proportional_break_time = (elapsed_time / current_shift_duration) * break_time
-        print(f"[DEBUG] Tiempo proporcional de comedor para la línea {line}: {proportional_break_time:.2f} segundos")
-
-        adjusted_elapsed_time = max(0, elapsed_time - proportional_break_time)
-        print(f"[DEBUG] Tiempo ajustado para la línea {line}: {adjusted_elapsed_time:.2f} segundos")
-
-        line_label = folder_labels.get(line, line)
-        print(f"[DEBUG] Etiqueta de línea para {line}: {line_label}")
-
-        inactive_time = max(0, pulse_history_data["inactiveTimeByLine"].get(line_label, 0))
-        print(f"[DEBUG] Tiempo inactivo para la línea {line}: {inactive_time:.2f} segundos")
-
-        operational_time = max(0, adjusted_elapsed_time - inactive_time)
-        print(f"[DEBUG] Tiempo operativo para la línea {line}: {operational_time:.2f} segundos")
-
-        # KPIs
-        good_pieces = counts["Passed"]
-        print(f"[DEBUG] Piezas buenas (Passed) para la línea {line}: {good_pieces}")
-
-        total_pieces = total_tests
-        print(f"[DEBUG] Piezas totales para la línea {line}: {total_pieces}")
-
-        # Disponibilidad
-        if adjusted_elapsed_time > 0:
-            availability = max(0, min((adjusted_elapsed_time - inactive_time) / adjusted_elapsed_time, 1)) * 100
-        else:
-            availability = 0
-        print(f"[DEBUG] Disponibilidad (Availability) para la línea {line}: {availability:.2f}%")
-
-        # Rendimiento
-        if good_pieces == 0 or operational_time == 0:
-            performance = 0
-        else:
-            performance = (good_pieces * 10) / operational_time * 100  # Ciclo ideal de 10 segundos
-        print(f"[DEBUG] Rendimiento (Performance) para la línea {line}: {performance:.2f}%")
-
-        # Calidad
-        if total_pieces > 0:
-            quality = (good_pieces / total_pieces) * 100
-        else:
-            quality = 0
-        print(f"[DEBUG] Calidad (Yield) para la línea {line}: {quality:.2f}%")
-
-        # OEE
-        oee = (availability / 100) * (performance / 100) * (quality / 100) * 100
-        print(f"[DEBUG] OEE para la línea {line}: {oee:.2f}%")
-
-        # Preparar datos para la base de datos
-        kpi_data = {
-            "shift": current_shift,                            # Turno calculado
-            "FALine": line_label,                              # Nombre de la línea
-            "ok": good_pieces,                                 # Piezas pasadas
-            "nok": counts["Failed"],                           # Piezas fallidas
-            "yield": quality,                                  # Rendimiento en porcentaje
-            "operativeTime": operational_time / 60,            # Convertir de segundos a minutos
-            "availability": availability,                      # Disponibilidad en porcentaje
-            "performance": performance,                        # Performance en porcentaje
-            "OEE": oee                                         # OEE en porcentaje
-        }
-
-        # Validar los valores calculados
-        print(f"[DEBUG] Datos preparados para la base de datos para la línea {line}: {kpi_data}")
-
-        # Insertar en la base de datos
-        try:
-            insert_kpi(kpi_data)
-            print(f"[INFO] KPI insertado para la línea {line}: {kpi_data}")
-        except Exception as e:
-            print(f"[ERROR] Error al insertar KPI para la línea {line}: {e}")
-
-def reset_counts_and_graph():
-    with counts_lock:
-        pass_fail_counts.clear()
-        cycle_times.clear()  
-        last_file_times.clear()
-        # Limpia el historial del monitor de pulsos
-        global pulse_history_data
-        pulse_history_data = {
-            "pulseHistoryX": defaultdict(list),
-            "pulseHistoryY": defaultdict(list),
-            "inactiveTimeByLine": defaultdict(int),
-            "lastUpdateByLine": defaultdict(lambda: datetime.datetime.now().timestamp())
-        }
-    # Actualiza las gráficas del frontend
-    emit_data()  
-    socketio.emit('pulse_history_data', pulse_history_data)  
-    socketio.emit('reset_activity_monitor')  
-
-    print("[INFO] Datos y gráficos reiniciados correctamente")
 
 def monitor_directory(path):
     event_handler = NewFileHandler()
@@ -548,97 +430,17 @@ def monitor_directory(path):
         observer.stop()
     observer.join()
 
-@socketio.on('get_pulse_history')
-def send_pulse_history():
-    """
-    Enviar el historial del monitor de pulsos al cliente.
-    """
-    socketio.emit('pulse_history_data', pulse_history_data)
-
-@socketio.on('update_pulse_history')
-def update_pulse_history(data):
-    """
-    Actualizar los datos del historial de pulsos desde el cliente.
-    """
-    global pulse_history_data
-    pulse_history_data["pulseHistoryX"].update(data.get("pulseHistoryX", {}))
-    pulse_history_data["pulseHistoryY"].update(data.get("pulseHistoryY", {}))
-    pulse_history_data["inactiveTimeByLine"].update(data.get("inactiveTimeByLine", {}))
-    pulse_history_data["lastUpdateByLine"].update(data.get("lastUpdateByLine", {}))
-
-
-@socketio.on('reset_activity_monitor')
-def reset_activity_monitor():
-    """
-    Restablecer el historial del monitor de pulsos.
-    """
-    global pulse_history_data
-    pulse_history_data = {
-        "pulseHistoryX": defaultdict(list),
-        "pulseHistoryY": defaultdict(list),
-        "inactiveTimeByLine": defaultdict(int),
-        "lastUpdateByLine": defaultdict(lambda: datetime.datetime.now().timestamp())
-    }
-    socketio.emit('pulse_history_data', pulse_history_data)
-    print("[INFO] Monitor de actividad reiniciado.")
-    #######################################new
-@socketio.on('connect')
-def handle_connect():
-    """
-    Envía el estado inicial al cliente cuando se conecta.
-    """
-    print("[INFO] Cliente conectado. Enviando estado inicial de pulse_history_data.")
-    socketio.emit('pulse_history_data', pulse_history_data)
-    emit_data()  # Enviar el estado actual de producción
-#####################################new
-def periodic_emitter(interval=30):
-    """
-    Emite datos periódicamente para refrescar el gráfico, incluso si no hay nuevos archivos.
-    :param interval: Tiempo en segundos entre emisiones.
-    """
-    while True:
-        with counts_lock:
-            now = datetime.datetime.now().timestamp()
-            for line, last_update in pulse_history_data["lastUpdateByLine"].items():
-                elapsed_time = now - last_update
-                if elapsed_time > 0:  # Solo acumular si hay inactividad
-                    pulse_history_data["inactiveTimeByLine"][line] += elapsed_time
-                    pulse_history_data["lastUpdateByLine"][line] = now  # Actualizar el último tiempo
-            emit_data()  # Actualizar el frontend
-        time.sleep(interval)
-
 @app.route('/')
 def index():
     return render_template('index.html')
-    
-
-@app.route('/historico')
-def historico():
-    return render_template('historico.html')
-
-@app.route('/api/historico', methods=['POST'])
-def get_historico_data():
-    data = request.json
-    start_date = data.get('start_date')
-    end_date = data.get('end_date')
-
-    if not start_date or not end_date:
-        return jsonify({"error": "Las fechas de inicio y fin son requeridas."}), 400
-
-    results = fetch_historico_data(start_date, end_date)
-
-    if results is None:
-        return jsonify({"error": "Error al consultar datos históricos."}), 500
-
-    return jsonify(results)
 
 if __name__ == '__main__':
     path_to_monitor = r"\\mlxgumvwfile01\Departamentos\Fakra\Pruebas\LogFiles"
-    monitor_thread = threading.Thread(target=monitor_directory, args=(path_to_monitor,))
-    monitor_thread.start()
-    reset_scheduler_thread = threading.Thread(target=reset_scheduler, daemon=True)
-    reset_scheduler_thread.start()
-    periodic_emitter_thread = threading.Thread(target=periodic_emitter, args=(30,), daemon=True)  # Intervalo de 30 segundos
-    periodic_emitter_thread.start()
-    socketio.run(app, host="0.0.0.0", port=5000, use_reloader=False)
 
+    monitor_thread = threading.Thread(target=monitor_directory, args=(path_to_monitor,))##hilo monitoreo
+    monitor_thread.start()
+
+    periodic_thread = threading.Thread(target=periodic_update, daemon=True)##hilo de actualizacion
+    periodic_thread.start()
+
+    socketio.run(app, host="0.0.0.0", port=5000, use_reloader=False)
