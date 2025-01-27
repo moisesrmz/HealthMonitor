@@ -8,23 +8,31 @@
     <script src="/static/js/socket.io.min.js"></script>
 </head>
 <body>
-    <h1>Monitor de Líneas FA</h1>
+    <h1>POEE DASHBOARD EOL TESTERS [FA]</h1>
     <div class="grid-container">
         <div class="column">
             {% for i in range(1, 6) %}
             <div class="fa-line" id="fa-line-{{ i }}">
-                <div class="gauge" id="gauge-{{ i }}"></div>
+                <div class="gauge-container">
+                    <p class="poee-label">POEE</p>
+                    <div class="gauge" id="gauge-{{ i }}"></div>
+                </div>
                 <div class="indicators">
                     <h2>F{{ i }}</h2>
                     <div class="indicator-column">
                         <div>
-                            <p><strong>Yield:</strong> <span id="yield-{{ i }}">0%</span></p>
-                            <p><strong>Disponibilidad:</strong> <span id="availability-{{ i }}">0%</span></p>
-                            <p><strong>Rendimiento:</strong> <span id="performance-{{ i }}">0%</span></p>
+                            <p class="aligned-text"><strong>Yield:</strong> <span id="yield-{{ i }}">0%</span></p>
+                            <p class="aligned-text"><strong>Total Pzs:</strong> <span id="total-pieces-{{ i }}">0</span></p>
+                            <p class="aligned-text"><strong>Fallas:</strong> <span id="bads-{{ i }}">0</span></p>
+                            <p class="aligned-text"><strong>Disponibilidad:</strong> <span id="availability-{{ i }}">0%</span></p>
+                            <p class="aligned-text"><strong>Rendimiento:</strong> <span id="performance-{{ i }}">0%</span></p>
                         </div>
                         <div>
-                            <p><strong>Tiempo Transcurrido:</strong> <span id="elapsed-time-{{ i }}">0s</span></p>
-                            <p><strong>Tiempo Inactivo:</strong> <span id="inactive-{{ i }}">0s</span></p>
+                            <p class="aligned-text"><strong>Tiempo Transcurrido:</strong> <span id="elapsed-time-{{ i }}">0s</span></p>
+                            <p class="aligned-text"><strong>Tiempo Inactivo:</strong> <span id="inactive-{{ i }}">0s</span></p>
+                            <p class="aligned-text"><strong>Tiempo Operativo:</strong> <br></br> <span id="operational-time-{{ i }}">0s</span></p>
+                            <p class="aligned-text"><strong>Tiempo Ciclo:</strong> <span id="avg-cycle-time-{{ i }}">0s</span></p>
+
                         </div>
                     </div>
                 </div>
@@ -34,24 +42,40 @@
         <div class="column">
             {% for i in range(6, 11) %}
             <div class="fa-line" id="fa-line-{{ i }}">
-                <div class="gauge" id="gauge-{{ i }}"></div>
+                <div class="gauge-container">
+                    <p class="poee-label">POEE</p>
+                    <div class="gauge" id="gauge-{{ i }}"></div>
+                </div>
                 <div class="indicators">
                     <h2>F{{ i }}</h2>
                     <div class="indicator-column">
                         <div>
-                            <p><strong>Yield:</strong> <span id="yield-{{ i }}">0%</span></p>
-                            <p><strong>Disponibilidad:</strong> <span id="availability-{{ i }}">0%</span></p>
-                            <p><strong>Rendimiento:</strong> <span id="performance-{{ i }}">0%</span></p>
+                            <p class="aligned-text"><strong>Yield:</strong> <span id="yield-{{ i }}">0%</span></p>
+                            <p class="aligned-text"><strong>Total Pzs:</strong> <span id="total-pieces-{{ i }}">0</span></p>
+                            <p class="aligned-text"><strong>Fallas:</strong> <span id="bads-{{ i }}">0</span></p>
+                            <p class="aligned-text"><strong>Disponibilidad:</strong> <span id="availability-{{ i }}">0%</span></p>
+                            <p class="aligned-text"><strong>Rendimiento:</strong> <span id="performance-{{ i }}">0%</span></p>
                         </div>
                         <div>
-                            <p><strong>Tiempo Transcurrido:</strong> <span id="elapsed-time-{{ i }}">0s</span></p>
-                            <p><strong>Tiempo Inactivo:</strong> <span id="inactive-{{ i }}">0s</span></p>
+                            <p class="aligned-text"><strong>Tiempo Transcurrido:</strong> <span id="elapsed-time-{{ i }}">0s</span></p>
+                            <p class="aligned-text"><strong>Tiempo Inactivo:</strong> <span id="inactive-{{ i }}">0s</span></p>
+                            <p class="aligned-text"><strong>Tiempo Operativo:</strong> <br></br> <span id="operational-time-{{ i }}">0s</span></p>
+                            <p class="aligned-text"><strong>Tiempo Ciclo:</strong> <span id="avg-cycle-time-{{ i }}">0s</span></p>
+
                         </div>
                     </div>
                 </div>
             </div>
             {% endfor %}
         </div>
+    </div>
+    <div class="footer" style="text-align: center; margin-top: 40px; color: #757575; font-size: 0.9em;">
+        &copy; 2025 FA Health Monitor.
+        <br><br>
+        Developed by HFM Test Department.
+        <br><br>
+        <a href="mailto:moises.ramirez1@molex.com" style="color: #00ccff; text-decoration: none;">Contacto</a>
+        <br>
     </div>
 
     <style>
@@ -63,9 +87,11 @@
         }
 
         h1 {
+            font-size: 2em;  /* Puedes aumentar este valor según sea necesario */
             text-align: center;
-            margin: 0px 0;
+            margin: 10px 0;
         }
+
 
         .grid-container {
             display: flex;
@@ -89,7 +115,7 @@
             background-color: #f4f4f4;
             padding: 10px;
             border-radius: 20px;
-            box-shadow: 0 0 20px rgba(255,99,71,0.9);
+            box-shadow: 0 0 25px rgba(255,99,71,0.9);
             width: 90%;
             height: 135px; /* Ajuste de altura general */
             margin-bottom:20px
@@ -114,7 +140,7 @@
         }
 
         h2 {
-            font-size: 1.1em; /* Ajusta el tamaño del título */
+            font-size: 1.5em; /* Ajusta el tamaño del título */
             margin: 0 0 5px 0;
         }
 
@@ -124,19 +150,51 @@
         }
         .indicator-column {
             display: grid;  /* Cambiar flex a grid para organizar columnas */
-            grid-template-columns: 1fr 1fr;  /* Crear dos columnas de tamaño igual */
+            grid-template-columns: 47% 53%;  /* Crear dos columnas de tamaño igual */
             justify-content: start;  /* Alinear el contenido a la izquierda */
             align-items: start;  /* Alinear verticalmente al inicio */
             gap: 0px;  /* Espaciado entre columnas */
         }
 
         .fa-line.active {
-            box-shadow: 0 0 20px rgba(60,179,113,0.9);
+            box-shadow: 0 0 25px rgba(60,179,113,0.9);
         }
 
         .fa-line.inactive {
-            box-shadow: 0 0 20px rgba(255,99,71,0.9);
+            box-shadow: 0 0 25px rgba(255,99,71,0.9);
         }
+        .aligned-text {
+            display: flex;
+            justify-content: space-between;
+            width: 100%;
+        }
+
+        .aligned-text strong {
+            min-width: 150px;  /* Ajusta este valor según sea necesario para alinear */
+            display: inline-block;
+            text-align: left;
+        }
+
+        .aligned-text span {
+            flex-grow: 1;
+            text-align: left; /* Alinea a la izquierda los valores dinámicos */
+        }
+        .poee-label {
+            font-size: 0.9em;  /* Tamaño de la fuente menor que h2 */
+            font-weight: bold;
+            text-align: center;
+            margin-bottom: 5px;  /* Espacio entre el texto y el gauge */
+            color: #555;  /* Color gris oscuro */
+        }
+
+        .gauge-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            width: 40%;  /* Asegura que el contenedor use todo el ancho disponible */
+        }
+
+
     </style>
 
     <script>
@@ -179,11 +237,64 @@
                 value: 0 // Valor inicial
             };
         }
+        socket.on('reset_data', () => {
+            console.log("Reseteo de datos recibido.");
+
+                // Mostrar una notificación en la página
+            const notification = document.createElement("div");
+            notification.innerText = "¡Datos reseteados exitosamente!";
+            notification.style.position = "fixed";
+            notification.style.top = "10px";
+            notification.style.right = "10px";
+            notification.style.padding = "15px";
+            notification.style.backgroundColor = "#28a745";
+            notification.style.color = "white";
+            notification.style.borderRadius = "5px";
+            notification.style.boxShadow = "0 0 10px rgba(0,0,0,0.3)";
+            document.body.appendChild(notification);
+
+            // Eliminar la notificación después de 5 segundos
+            setTimeout(() => {
+                document.body.removeChild(notification);
+            }, 5000);
+
+            // Reiniciar valores en la interfaz
+            for (let i = 1; i <= 10; i++) {
+                document.getElementById(`avg-cycle-time-${i}`).innerText = "N/A";
+                document.getElementById(`yield-${i}`).innerText = "0%";
+                document.getElementById(`total-pieces-${i}`).innerText = "0";
+                document.getElementById(`good-pieces-${i}`).innerText = "0";
+                document.getElementById(`availability-${i}`).innerText = "0%";
+                document.getElementById(`performance-${i}`).innerText = "0%";
+                document.getElementById(`elapsed-time-${i}`).innerText = "0h 0m 0s";
+                document.getElementById(`inactive-${i}`).innerText = "0h 0m 0s";
+                document.getElementById(`operational-time-${i}`).innerText = "0h 0m 0s";
+
+                const lineElement = document.getElementById(`fa-line-${i}`);
+                lineElement.classList.remove('active');
+                lineElement.classList.remove('inactive');
+
+                // Resetear gráficos de Plotly
+                Plotly.update(`gauge-${i}`, { value: [0] });
+            }
+
+            //alert("¡Datos reseteados exitosamente!");
+        });
 
         socket.on('update_data', (data) => {
             data.forEach((item) => {
                 const lineNumber = parseInt(item.label.slice(1));
                 const oeeValue = item.oee * 100;
+
+                // Seleccionar el valor disponible entre reference, test_name, o nombre_prueba
+                let displayName = item.reference && item.reference !== "N/A" ? item.reference :
+                          item.test_name && item.test_name !== "N/A" ? item.test_name :
+                          item.nombre_prueba && item.nombre_prueba !== "N/A" ? item.nombre_prueba :
+                          "Sin Información";
+                // Actualizar el encabezado H2 con el nombre de la línea + el valor correspondiente
+                //document.querySelector(`#fa-line-${lineNumber} h2`).innerText = `F${lineNumber}                  -${displayName}-`;
+                document.querySelector(`#fa-line-${lineNumber} h2`).innerHTML = `F${lineNumber}&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;-${displayName}-`;
+
 
                 // Actualizar texto de indicadores
                 //document.getElementById(`yield-${lineNumber}`).innerText = `${item.yield.toFixed(2)}%`;
@@ -192,11 +303,19 @@
                 //document.getElementById(`availability-${lineNumber}`).innerText = `${(item.availability * 100).toFixed(2)}%`;
                 //document.getElementById(`performance-${lineNumber}`).innerText = `${(item.performance * 100).toFixed(2)}%`;
                 //document.getElementById(`inactive-${lineNumber}`).innerText = `${formatTime(item.inactive_time)}`;
-                document.getElementById(`yield-${lineNumber}`).innerText = `${item.yield.toFixed(2)}%`;
-                document.getElementById(`availability-${lineNumber}`).innerText = `${(item.availability * 100).toFixed(2)}%`;
-                document.getElementById(`performance-${lineNumber}`).innerText = `${(item.performance * 100).toFixed(2)}%`;
+                document.getElementById(`avg-cycle-time-${lineNumber}`).innerText =item.avg_cycle_time ? `${item.avg_cycle_time.toFixed(2)} s` : "N/A";
+                document.getElementById(`yield-${lineNumber}`).innerText = `${item.yield.toFixed(1)}%`;
+                //document.getElementById(`goods-${lineNumber}`).innerText = item.passed;
+                //document.getElementById(`bads-${lineNumber}`).innerText = item.failed;
+                document.getElementById(`availability-${lineNumber}`).innerText = `${(item.availability * 100).toFixed(1)}%`;
+                document.getElementById(`performance-${lineNumber}`).innerText = `${(item.performance * 100).toFixed(1)}%`;
+                document.getElementById(`total-pieces-${lineNumber}`).innerText = `${item.total_tests}`;
+                //document.getElementById(`good-pieces-${lineNumber}`).innerText = `${item.passed}`;
+                document.getElementById(`bads-${lineNumber}`).innerText = item.failed;
                 document.getElementById(`elapsed-time-${lineNumber}`).innerText = `${formatTime(item.elapsed_time)}`;
                 document.getElementById(`inactive-${lineNumber}`).innerText = `${formatTime(item.inactive_time)}`;
+                document.getElementById(`operational-time-${lineNumber}`).innerText = `${formatTime(item.operational_time)}`;
+
 
 
                 // Determinar color dinámico basado en el valor de OEE
@@ -237,7 +356,6 @@
                 }
             });
         });
-
         const formatTime = (seconds) => {
             let hours = Math.floor(seconds / 3600);
             let minutes = Math.floor((seconds % 3600) / 60);
@@ -245,12 +363,5 @@
             return `${hours}h ${minutes}m ${secs}s`;
         };
     </script>
-
-
-
-
-
-
-    
 </body>
 </html>

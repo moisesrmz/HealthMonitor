@@ -12,7 +12,9 @@ import threading
 from database_operations import insert_test_result
 from database_operations import fetch_historico_data
 from database_operations import insert_kpi
-
+import numpy as np
+from selenium import webdriver
+from selenium.webdriver.chrome.options import Options
 
 app = Flask(__name__)
 socketio = SocketIO(app)
@@ -50,6 +52,7 @@ class NewFileHandler(FileSystemEventHandler):
                     timestamp = datetime.datetime.now()
                     calculate_cycle_time(parent_folder, timestamp)
                     # Calcular el tiempo de ciclo promedio antes de procesar el archivo
+
                     oee_data = calculate_oee(parent_folder)
                     adjusted_elapsed_time = oee_data["adjusted_elapsed_time"]
 
@@ -235,8 +238,9 @@ class NewFileHandler(FileSystemEventHandler):
 # Diccionario para almacenar tiempos de inactividad acumulados por línea
 inactivity_accumulated_time = {}
 inactivity_start_time = {}
-
+flag_state = defaultdict(lambda: False)
 def emit_data():
+    global flag
     data = []
     now = datetime.datetime.now()
     
@@ -251,15 +255,28 @@ def emit_data():
         avg_cycle_time = get_average_cycle_time(parent_folder)
         last_time = last_file_times[parent_folder]
         current_state = 1
-
+        
+        print("currentstate (1a impresion): ", current_state)
+        ##############################################################################################################aqui entra la primera vez para activar
         if avg_cycle_time is None or last_time is None:
             avg_cycle_time = 0
-            current_state = 0
+            #print("flag:: ", flag)
+            if not flag_state[parent_folder]:  # Si es la primera vez (flag = False)
+                current_state = 1
+                flag_state[parent_folder] = True  # Actualiza la bandera para futuras iteraciones
+                print(f"[INFO] Primera ejecución detectada para {parent_folder}, current_state = 1")
+            else:
+                current_state = 0  # Si ya pasó la primera vez, se desactiva
+                print(f"[INFO] Segunda ejecución para {parent_folder}, current_state = 0")
+
+            
         else:
-            if (now - last_time).total_seconds() > avg_cycle_time:
+            if (now - last_time).total_seconds() > avg_cycle_time + 3:##offset para inactivar linea
                 current_state = 0
+                print("currentstate (3a impresion (else): ", avg_cycle_time)
 
         # Lógica para acumulación de tiempo de inactividad
+        print("currentstate oficial(4a impresion (else): ", avg_cycle_time)
         if current_state == 0:
             if parent_folder not in inactivity_start_time:
                 inactivity_start_time[parent_folder] = now
@@ -274,9 +291,11 @@ def emit_data():
 
         # Calcular métricas OEE
         oee_data = calculate_oee(parent_folder, ideal_cycle_time=10)
-        data.append({
+
+        data.append({                                       ###################esto es lo que se envia al front end
             "label": label,
             "yield": yield_value,
+            "total_tests": total_tests,
             "passed": counts["Passed"],
             "failed": counts["Failed"],
             "reference": counts["Reference"],
@@ -285,6 +304,7 @@ def emit_data():
             "avg_cycle_time": avg_cycle_time,
             "state": current_state,
             "availability": oee_data["availability"],
+            "operational_time": oee_data["operational_time"],
             "performance": oee_data["performance"],
             "quality": oee_data["quality"],
             "oee": oee_data["oee"],
@@ -402,11 +422,25 @@ def calculate_cycle_time(line, timestamp):
         print(f"[INFO] No hay datos previos para la línea {line}. Esperando más datos.")
     last_file_times[line] = timestamp
 
-def get_average_cycle_time(line):
+def get_average_cycle_time(line, upper_percentile=96):
     times = cycle_times[line]
     if times:
-        return sum(times) / len(times)
-    return None
+        if len(times) == 1:
+            return times[0]  # Devuelve el primer tiempo registrado en lugar de N/A
+
+        # Calcular percentil superior (por defecto el 95%)
+        upper_bound = np.percentile(times, upper_percentile)
+
+        # Filtrar valores que están por debajo del percentil superior
+        filtered_times = [t for t in times if t <= upper_bound]
+
+        if len(filtered_times) > 0:
+            return sum(filtered_times) / len(filtered_times)  # Calcular promedio sin valores altos
+        else:
+            return None  # Si todos fueron filtrados como outliers
+
+    return None  # Si no hay registros, devuelve None
+
 
 def periodic_update(interval=30):
     """
@@ -430,6 +464,92 @@ def monitor_directory(path):
         observer.stop()
     observer.join()
 
+def reset_all_values():
+    global pass_fail_counts, cycle_times, inactivity_accumulated_time, inactivity_start_time, last_reset_time, last_file_times, flag_state
+
+    with counts_lock:
+        # Reset de todas las métricas a valores iniciales
+        pass_fail_counts.clear()
+        cycle_times.clear()
+        inactivity_accumulated_time.clear()
+        inactivity_start_time.clear()
+        last_file_times.clear()
+        flag_state.clear()
+        last_reset_time = datetime.datetime.now()
+
+    print("[INFO] ¡Se han reseteado todas las métricas y valores acumulados!")
+
+    # Emitir el evento de reseteo al frontend para limpiar gráficos, colores, etc.
+    socketio.emit('reset_data')
+
+    # Imprimir confirmación del reseteo
+    print("[INFO] Datos de la interfaz reiniciados y gráficos restablecidos.")
+
+def capture_screenshot():
+    try:
+        chrome_options = Options()
+        chrome_options.add_argument("--headless")  # Modo sin interfaz gráfica
+        chrome_options.add_argument("--no-sandbox")
+        chrome_options.add_argument("--disable-dev-shm-usage")
+        chrome_options.add_argument("--start-maximized")
+        #chrome_options.add_argument("--force-device-scale-factor=0.8")
+        chrome_options.add_argument("--window-size=1920,1080")  # Tamaño de la ventana
+
+        driver = webdriver.Chrome(options=chrome_options)
+        dashboard_url = "http://localhost:5000"  # Asegúrate de usar la URL correcta
+        driver.get(dashboard_url)
+        driver.execute_script("document.body.style.zoom='80%'")
+        #driver.set_window_size(1920, 1080)  # Configurar tamaño de ventana Full HD
+        # Esperar unos segundos para cargar la página completamente
+        time.sleep(4)
+        emit_data()
+        time.sleep(1)
+        # Crear carpeta de capturas si no existe
+        os.makedirs("screenshots", exist_ok=True)
+
+        # Guardar la captura de pantalla con marca de tiempo
+        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        screenshot_filename = f"screenshots/dashboard_{timestamp}.png"
+        driver.save_screenshot(screenshot_filename)
+        driver.quit()
+
+        print(f"[INFO] Captura de pantalla guardada en {screenshot_filename}")
+    except Exception as e:
+        print(f"[ERROR] Error al capturar la pantalla: {e}")
+
+def schedule_resets():
+    while True:
+        now = datetime.datetime.now()
+        reset_times = [
+            datetime.time(6, 30),   # Reinicio a las 6:30 AM
+            datetime.time(14, 30),  # Reinicio a las 2w:30 PM
+            datetime.time(22, 0),   # Reinicio a las 10:00 PM
+        ]
+
+        next_reset = None
+
+        # Encontrar el próximo reinicio en el mismo día
+        for reset_time in reset_times:
+            today_reset = datetime.datetime.combine(now.date(), reset_time)
+            if now < today_reset:
+                next_reset = today_reset
+                break
+
+        # Si no hay reinicio pendiente hoy, programarlo para el primer horario del día siguiente
+        if next_reset is None:
+            next_reset = datetime.datetime.combine(now.date() + datetime.timedelta(days=1), reset_times[0])
+
+        sleep_seconds = (next_reset - now).total_seconds()
+        print(f"[INFO] Próximo reinicio programado a las {next_reset.strftime('%Y-%m-%d %H:%M:%S')}")
+
+        time.sleep(sleep_seconds)  # Esperar hasta el momento del reinicio
+        print("[INFO] Capturando la pantalla antes del reinicio...")
+
+        
+        capture_screenshot()  # Capturar la pantalla antes del reinicio
+        reset_all_values()
+
+
 @app.route('/')
 def index():
     return render_template('index.html')
@@ -442,5 +562,8 @@ if __name__ == '__main__':
 
     periodic_thread = threading.Thread(target=periodic_update, daemon=True)##hilo de actualizacion
     periodic_thread.start()
+
+    reset_thread = threading.Thread(target=schedule_resets, daemon=True)##hilo de reseteo programado
+    reset_thread.start()
 
     socketio.run(app, host="0.0.0.0", port=5000, use_reloader=False)
