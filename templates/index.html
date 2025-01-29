@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+    <link rel="icon" href="/static/images/favicon.ico" type="image/x-icon">
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>FA Line Monitor</title>
@@ -276,7 +277,7 @@
 
                 // Resetear gráficos de Plotly
                 Plotly.update(`gauge-${i}`, { value: [0] });
-            }
+            }//original
 
             //alert("¡Datos reseteados exitosamente!");
         });
@@ -290,10 +291,10 @@
                 let displayName = item.reference && item.reference !== "N/A" ? item.reference :
                           item.test_name && item.test_name !== "N/A" ? item.test_name :
                           item.nombre_prueba && item.nombre_prueba !== "N/A" ? item.nombre_prueba :
-                          "Sin Información";
+                          "";
                 // Actualizar el encabezado H2 con el nombre de la línea + el valor correspondiente
                 //document.querySelector(`#fa-line-${lineNumber} h2`).innerText = `F${lineNumber}                  -${displayName}-`;
-                document.querySelector(`#fa-line-${lineNumber} h2`).innerHTML = `F${lineNumber}&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;-${displayName}-`;
+                document.querySelector(`#fa-line-${lineNumber} h2`).innerHTML = `F${lineNumber}&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;${displayName}`;
 
 
                 // Actualizar texto de indicadores

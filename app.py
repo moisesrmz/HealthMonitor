@@ -264,19 +264,19 @@ def emit_data():
             if not flag_state[parent_folder]:  # Si es la primera vez (flag = False)
                 current_state = 1
                 flag_state[parent_folder] = True  # Actualiza la bandera para futuras iteraciones
-                print(f"[INFO] Primera ejecución detectada para {parent_folder}, current_state = 1")
+                #print(f"[INFO] Primera ejecución detectada para {parent_folder}, current_state = 1")
             else:
                 current_state = 0  # Si ya pasó la primera vez, se desactiva
-                print(f"[INFO] Segunda ejecución para {parent_folder}, current_state = 0")
+                #print(f"[INFO] Segunda ejecución para {parent_folder}, current_state = 0")
 
             
         else:
             if (now - last_time).total_seconds() > avg_cycle_time + 3:##offset para inactivar linea
                 current_state = 0
-                print("currentstate (3a impresion (else): ", avg_cycle_time)
+                #print("currentstate (3a impresion (else): ", avg_cycle_time)
 
         # Lógica para acumulación de tiempo de inactividad
-        print("currentstate oficial(4a impresion (else): ", avg_cycle_time)
+        #print("currentstate oficial(4a impresion (else): ", avg_cycle_time)
         if current_state == 0:
             if parent_folder not in inactivity_start_time:
                 inactivity_start_time[parent_folder] = now
@@ -478,6 +478,30 @@ def reset_all_values():
         last_reset_time = datetime.datetime.now()
 
     print("[INFO] ¡Se han reseteado todas las métricas y valores acumulados!")
+    zero_data = []
+    for line_label in folder_labels.values():  # Iterar sobre todas las líneas configuradas
+        zero_data.append({
+            "label": line_label,
+            "yield": 0,
+            "total_tests": 0,
+            "passed": 0,
+            "failed": 0,
+            "reference": "N/A",
+            "test_name": "N/A",
+            "nombre_prueba": "N/A",
+            "avg_cycle_time": 0,
+            "state": 0,  # Estado inactivo
+            "availability": 0,
+            "operational_time": 0,
+            "performance": 0,
+            "quality": 0,
+            "oee": 0,
+            "inactive_time": 0,
+            "elapsed_time": 0,
+        })
+
+    # Emitir datos en ceros al frontend
+    socketio.emit('update_data', zero_data)
 
     # Emitir el evento de reseteo al frontend para limpiar gráficos, colores, etc.
     socketio.emit('reset_data')
@@ -566,4 +590,4 @@ if __name__ == '__main__':
     reset_thread = threading.Thread(target=schedule_resets, daemon=True)##hilo de reseteo programado
     reset_thread.start()
 
-    socketio.run(app, host="0.0.0.0", port=5000, use_reloader=False)
+    socketio.run(app, host="EASYTOUCH-PC", port=5000, use_reloader=False)
