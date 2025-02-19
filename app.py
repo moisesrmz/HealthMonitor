@@ -520,7 +520,7 @@ def capture_screenshot():
         chrome_options.add_argument("--window-size=1920,1080")  # Tamaño de la ventana
 
         driver = webdriver.Chrome(options=chrome_options)
-        dashboard_url = "http://localhost:5000"  # Asegúrate de usar la URL correcta
+        dashboard_url = "http://EASYTOUCH-PC:5000"  # Asegúrate de usar la URL correcta
         driver.get(dashboard_url)
         driver.execute_script("document.body.style.zoom='80%'")
         #driver.set_window_size(1920, 1080)  # Configurar tamaño de ventana Full HD
