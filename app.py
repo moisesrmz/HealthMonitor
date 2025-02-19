@@ -2,6 +2,7 @@ import os
 import time
 import re
 import datetime
+
 from flask import request, jsonify
 from flask import Flask, render_template
 from flask_socketio import SocketIO
@@ -463,6 +464,68 @@ def monitor_directory(path):
     except KeyboardInterrupt:
         observer.stop()
     observer.join()
+#####################################################################new functions
+NETWORK_FOLDER = r"\\mlxgumvwfile01\Departamentos\Fakra\Pruebas\LogFiles"
+CHECK_INTERVAL = 10  # Segundos entre verificaciones
+LOG_FILE = "network_log.txt"  # Archivo donde se guardarán las caídas de red
+
+def is_network_available():
+    """Verifica si la carpeta de red está accesible."""
+    return os.path.exists(NETWORK_FOLDER)
+
+def log_network_outage(start_time, end_time):
+    """Registra la caída de red en un archivo con duración detallada."""
+    duration = end_time - start_time
+    log_entry = (
+        f"Fecha de inicio: {start_time.strftime('%Y-%m-%d %H:%M:%S')}\n"
+        f"Fecha de recuperación: {end_time.strftime('%Y-%m-%d %H:%M:%S')}\n"
+        f"Duración de la caída: {duration.total_seconds():.2f} segundos ({duration})\n"
+        f"{'-'*60}\n"
+    )
+    
+    with open(LOG_FILE, "a") as log_file:
+        log_file.write(log_entry)
+
+    print(f"[LOG] Caída de red registrada:\n{log_entry}")
+
+
+
+def start_monitoring():
+    """Monitorea la carpeta de red y registra caídas en el log."""
+    outage_start_time = None  # Almacena el tiempo de inicio de la caída
+
+    while True:
+        if is_network_available():
+            if outage_start_time:
+                # Si la red volvió, registrar el tiempo de reconexión
+                outage_end_time = datetime.datetime.now()
+                log_network_outage(outage_start_time, outage_end_time)
+                outage_start_time = None  # Resetear la variable
+
+            print("[INFO] Red detectada. Iniciando monitoreo de archivos...")
+            observer = Observer()
+            event_handler = NewFileHandler()
+            observer.schedule(event_handler, NETWORK_FOLDER, recursive=True)
+            observer.start()
+
+            try:
+                while is_network_available():
+                    time.sleep(5)
+            except KeyboardInterrupt:
+                observer.stop()
+            observer.stop()
+            observer.join()
+            print("[WARNING] La red se ha caído. Deteniendo monitoreo...")
+        
+        else:
+            if outage_start_time is None:
+                # Registrar la hora de la caída solo la primera vez
+                outage_start_time = datetime.datetime.now()
+                print(f"[WARNING] Red caída desde {outage_start_time.strftime('%Y-%m-%d %H:%M:%S')}")
+
+        print("[WARNING] No se puede acceder a la red. Esperando reconexión...")
+        time.sleep(CHECK_INTERVAL)  # Esperar antes de volver a intentar
+##############################################################################################
 
 def reset_all_values():
     global pass_fail_counts, cycle_times, inactivity_accumulated_time, inactivity_start_time, last_reset_time, last_file_times, flag_state
@@ -520,7 +583,7 @@ def capture_screenshot():
         chrome_options.add_argument("--window-size=1920,1080")  # Tamaño de la ventana
 
         driver = webdriver.Chrome(options=chrome_options)
-        dashboard_url = "http://EASYTOUCH-PC:5000"  # Asegúrate de usar la URL correcta
+        dashboard_url = "http://127.0.0.1:5000"  # Asegúrate de usar la URL correcta
         driver.get(dashboard_url)
         driver.execute_script("document.body.style.zoom='80%'")
         #driver.set_window_size(1920, 1080)  # Configurar tamaño de ventana Full HD
@@ -579,9 +642,9 @@ def index():
     return render_template('index.html')
 
 if __name__ == '__main__':
-    path_to_monitor = r"\\mlxgumvwfile01\Departamentos\Fakra\Pruebas\LogFiles"
+    #path_to_monitor = r"\\mlxgumvwfile01\Departamentos\Fakra\Pruebas\LogFiles"
 
-    monitor_thread = threading.Thread(target=monitor_directory, args=(path_to_monitor,))##hilo monitoreo
+    monitor_thread = threading.Thread(target=start_monitoring, daemon=True)
     monitor_thread.start()
 
     periodic_thread = threading.Thread(target=periodic_update, daemon=True)##hilo de actualizacion
@@ -590,4 +653,4 @@ if __name__ == '__main__':
     reset_thread = threading.Thread(target=schedule_resets, daemon=True)##hilo de reseteo programado
     reset_thread.start()
 
-    socketio.run(app, host="EASYTOUCH-PC", port=5000, use_reloader=False)
+    socketio.run(app, host="0.0.0.0", port=5000, use_reloader=False)
