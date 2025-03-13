@@ -2,7 +2,7 @@ import os
 import time
 import re
 import datetime
-
+from datetime import timedelta
 from flask import request, jsonify
 from flask import Flask, render_template
 from flask_socketio import SocketIO
@@ -468,18 +468,25 @@ def monitor_directory(path):
 NETWORK_FOLDER = r"\\mlxgumvwfile01\Departamentos\Fakra\Pruebas\LogFiles"
 CHECK_INTERVAL = 10  # Segundos entre verificaciones
 LOG_FILE = "network_log.txt"  # Archivo donde se guardarán las caídas de red
+WATCHDOG_INTERVAL = 1  # 🔹 Se reduce el tiempo entre eventos de Watchdog
 
 def is_network_available():
-    """Verifica si la carpeta de red está accesible."""
-    return os.path.exists(NETWORK_FOLDER)
+    """Verifica si la carpeta de red está accesible sin bloquear el sistema."""
+    try:
+        with os.scandir(NETWORK_FOLDER):  # Accede más rápido que os.path.exists()
+            return True
+    except (OSError, FileNotFoundError):
+        return False
 
 def log_network_outage(start_time, end_time):
-    """Registra la caída de red en un archivo con duración detallada."""
-    duration = end_time - start_time
+    """Registra la caída de red en un archivo con duración detallada sin decimales."""
+    duration_seconds = int((end_time - start_time).total_seconds())
+    duration_formatted = str(timedelta(seconds=duration_seconds))  
+
     log_entry = (
         f"Fecha de inicio: {start_time.strftime('%Y-%m-%d %H:%M:%S')}\n"
         f"Fecha de recuperación: {end_time.strftime('%Y-%m-%d %H:%M:%S')}\n"
-        f"Duración de la caída: {duration.total_seconds():.2f} segundos ({duration})\n"
+        f"Duración de la caída: {duration_seconds} segundos ({duration_formatted})\n"
         f"{'-'*60}\n"
     )
     
@@ -488,43 +495,43 @@ def log_network_outage(start_time, end_time):
 
     print(f"[LOG] Caída de red registrada:\n{log_entry}")
 
-
-
 def start_monitoring():
-    """Monitorea la carpeta de red y registra caídas en el log."""
-    outage_start_time = None  # Almacena el tiempo de inicio de la caída
+    """Monitorea la carpeta de red y reacciona más rápido ante caídas y reconexiones."""
+    outage_start_time = None  
+    observer = Observer(timeout=WATCHDOG_INTERVAL)  # Instancia de Watchdog
+    event_handler = NewFileHandler()
 
     while True:
         if is_network_available():
             if outage_start_time:
-                # Si la red volvió, registrar el tiempo de reconexión
                 outage_end_time = datetime.datetime.now()
                 log_network_outage(outage_start_time, outage_end_time)
-                outage_start_time = None  # Resetear la variable
+                outage_start_time = None  # Reseteamos la variable
 
             print("[INFO] Red detectada. Iniciando monitoreo de archivos...")
-            observer = Observer()
-            event_handler = NewFileHandler()
-            observer.schedule(event_handler, NETWORK_FOLDER, recursive=True)
-            observer.start()
+            
+            # 🔹 Evita iniciar múltiples instancias de Watchdog
+            if not observer.is_alive():
+                observer.schedule(event_handler, NETWORK_FOLDER, recursive=True)
+                try:
+                    observer.start()  # 🔹 Iniciar solo si no está en ejecución
+                except RuntimeError:
+                    print("[ERROR] Watchdog ya estaba iniciado. Omitiendo.")
 
-            try:
-                while is_network_available():
-                    time.sleep(5)
-            except KeyboardInterrupt:
-                observer.stop()
-            observer.stop()
-            observer.join()
-            print("[WARNING] La red se ha caído. Deteniendo monitoreo...")
-        
+            time.sleep(CHECK_INTERVAL)  # 🔹 Revisar la red cada 2 segundos para evitar bloqueos
         else:
             if outage_start_time is None:
-                # Registrar la hora de la caída solo la primera vez
                 outage_start_time = datetime.datetime.now()
                 print(f"[WARNING] Red caída desde {outage_start_time.strftime('%Y-%m-%d %H:%M:%S')}")
 
-        print("[WARNING] No se puede acceder a la red. Esperando reconexión...")
-        time.sleep(CHECK_INTERVAL)  # Esperar antes de volver a intentar
+            if observer.is_alive():
+                observer.stop()  # 🔹 Detiene el observador si la red se cae
+                observer.join()  # 🔹 Esperar a que el hilo se cierre antes de continuar
+                print("[INFO] Watchdog detenido debido a la caída de la red.")
+
+            print("[WARNING] No se puede acceder a la red. Esperando reconexión...")
+            time.sleep(CHECK_INTERVAL)  # 🔹 Revisar más frecuentemente si la red vuelve
+
 ##############################################################################################
 
 def reset_all_values():

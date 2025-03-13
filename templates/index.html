@@ -9,13 +9,13 @@
     <script src="/static/js/socket.io.min.js"></script>
 </head>
 <body>
-    <h1>POEE DASHBOARD EOL TESTERS [FA]</h1>
+    <h1>OEE DASHBOARD EOL TESTERS [FA]</h1>
     <div class="grid-container">
         <div class="column">
             {% for i in range(1, 6) %}
             <div class="fa-line" id="fa-line-{{ i }}">
                 <div class="gauge-container">
-                    <p class="poee-label">POEE</p>
+                    <p class="poee-label">OEE</p>
                     <div class="gauge" id="gauge-{{ i }}"></div>
                 </div>
                 <div class="indicators">
@@ -44,7 +44,7 @@
             {% for i in range(6, 11) %}
             <div class="fa-line" id="fa-line-{{ i }}">
                 <div class="gauge-container">
-                    <p class="poee-label">POEE</p>
+                    <p class="poee-label">OEE</p>
                     <div class="gauge" id="gauge-{{ i }}"></div>
                 </div>
                 <div class="indicators">
@@ -70,10 +70,10 @@
             {% endfor %}
         </div>
     </div>
-    <div class="footer" style="text-align: center; margin-top: 40px; color: #757575; font-size: 0.9em;">
-        &copy; 2025 FA Health Monitor.
+    <div class="footer" style="text-align: center; margin-top: -5px; color: #757575; font-size: 0.9em;">
+        &copy; Developed by HFM Test Department.
         <br><br>
-        Developed by HFM Test Department.
+         2025 FA Health Monitor.
         <br><br>
         <a href="mailto:moises.ramirez1@molex.com" style="color: #00ccff; text-decoration: none;">Contacto</a>
         <br>
@@ -81,7 +81,11 @@
 
     <style>
         body {
-            margin: 0;
+            transform: scale(0.8);
+            transform-origin: top left;
+            width: 125%;
+            height: 100%;
+            margin-left: 0; /* Corrige el desplazamiento */
             font-family: Arial, sans-serif;
             background-color: #f4f4f4;
             color: #333;
@@ -96,17 +100,17 @@
 
         .grid-container {
             display: flex;
-            justify-content: center;
+            justify-content: space-evenly; /* Separa las columnas de manera equitativa */
             padding: 10px;
-            gap: 0px; /* Espaciado entre columnas */
+            width: 100%; /* Usa todo el ancho disponible */
+            max-width: 100%; /* Evita restricciones de ancho */
         }
 
         .column {
-            display: flex;
-            flex-direction: column;
-            gap: 10px; /* Espaciado entre filas */
-            width: 45%; /* Ajusta el ancho de cada columna */
+            width: 46%; /* Aumenta el ancho de cada columna */
         }
+
+
 
         .fa-line {
             display: flex;
@@ -117,8 +121,8 @@
             padding: 10px;
             border-radius: 20px;
             box-shadow: 0 0 25px rgba(255,99,71,0.9);
-            width: 90%;
-            height: 135px; /* Ajuste de altura general */
+            width: 100%;/* original 90 */
+            height: 120px; /* Ajuste de altura general original 135*/
             margin-bottom:20px
         }
 
@@ -208,10 +212,10 @@
             Plotly.newPlot(`gauge-${i}`, [{
                 type: "indicator",
                 mode: "gauge+number",
-                value: 0,
+                value: "N/A",
                 title: { text: "", font: { size: 12 }, position: "top center" },
                 number: {
-                    suffix: "%" // Agrega el símbolo % al valor mostrado
+                    suffix: "" // Agrega el símbolo % al valor mostrado
                 },
                 gauge: {
                     axis: {
@@ -241,7 +245,7 @@
         socket.on('reset_data', () => {
             console.log("Reseteo de datos recibido.");
 
-                // Mostrar una notificación en la página
+            // Mostrar una notificación en la página
             const notification = document.createElement("div");
             notification.innerText = "¡Datos reseteados exitosamente!";
             notification.style.position = "fixed";
@@ -275,35 +279,31 @@
                 lineElement.classList.remove('active');
                 lineElement.classList.remove('inactive');
 
-                // Resetear gráficos de Plotly
-                Plotly.update(`gauge-${i}`, { value: [0] });
-            }//original
+                // Resetear gráficos de Plotly sin mostrar "0%"
+                Plotly.update(`gauge-${i}`, { value: [null] });  // <-- Modificado
 
-            //alert("¡Datos reseteados exitosamente!");
+                setTimeout(() => {
+                    let gaugeTextElement = document.querySelector(`#gauge-${i} .num`);
+                    if (gaugeTextElement) {
+                        gaugeTextElement.innerText = "-";  // <-- Modificado
+                    }
+                }, 100);
+            }
         });
+
 
         socket.on('update_data', (data) => {
             data.forEach((item) => {
                 const lineNumber = parseInt(item.label.slice(1));
                 const oeeValue = item.oee * 100;
+                let displayValue = oeeValue === 0 ? "N/A" : `${oeeValue.toFixed(1)}%`;  // <-- Línea modificada
 
                 // Seleccionar el valor disponible entre reference, test_name, o nombre_prueba
                 let displayName = item.reference && item.reference !== "N/A" ? item.reference :
                           item.test_name && item.test_name !== "N/A" ? item.test_name :
                           item.nombre_prueba && item.nombre_prueba !== "N/A" ? item.nombre_prueba :
                           "";
-                // Actualizar el encabezado H2 con el nombre de la línea + el valor correspondiente
-                //document.querySelector(`#fa-line-${lineNumber} h2`).innerText = `F${lineNumber}                  -${displayName}-`;
                 document.querySelector(`#fa-line-${lineNumber} h2`).innerHTML = `F${lineNumber}&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;${displayName}`;
-
-
-                // Actualizar texto de indicadores
-                //document.getElementById(`yield-${lineNumber}`).innerText = `${item.yield.toFixed(2)}%`;
-                //document.getElementById(`goods-${lineNumber}`).innerText = item.passed;
-                //document.getElementById(`bads-${lineNumber}`).innerText = item.failed;
-                //document.getElementById(`availability-${lineNumber}`).innerText = `${(item.availability * 100).toFixed(2)}%`;
-                //document.getElementById(`performance-${lineNumber}`).innerText = `${(item.performance * 100).toFixed(2)}%`;
-                //document.getElementById(`inactive-${lineNumber}`).innerText = `${formatTime(item.inactive_time)}`;
                 document.getElementById(`avg-cycle-time-${lineNumber}`).innerText =item.avg_cycle_time ? `${item.avg_cycle_time.toFixed(2)} s` : "N/A";
                 document.getElementById(`yield-${lineNumber}`).innerText = `${item.yield.toFixed(1)}%`;
                 //document.getElementById(`goods-${lineNumber}`).innerText = item.passed;
@@ -331,7 +331,7 @@
 
                 // Actualizar el gauge sin cambiar la escala ni el fondo
                 Plotly.update(`gauge-${lineNumber}`, {
-                    value: [oeeValue],
+                    value: [oeeValue === 0 ? null : oeeValue],  // <-- Línea modificada: Si es 0, asignar null para ocultar la aguja
                     gauge: {
                         bar: { color: barColor }, // Actualizar solo el color de la barra
                         axis: {
@@ -344,9 +344,17 @@
                         ]
                     },
                     number: {
-                        suffix: "%" // Agrega el símbolo % al valor dinámico
+                        prefix: "", // Evitar prefijos extraños
+                        suffix: oeeValue === 0 ? "" : "%",  // <-- Línea modificada: Si es 0, no agregar el porcentaje
+                        valueformat: ".1f"
                     }
                 });
+                setTimeout(() => {
+                    let gaugeTextElement = document.querySelector(`#gauge-${lineNumber} .num`);
+                    if (gaugeTextElement) {
+                        gaugeTextElement.innerText = displayValue;  // <-- Línea agregada: Modifica manualmente el texto mostrado en el gauge
+                    }
+                }, 100);
                 const lineElement = document.getElementById(`fa-line-${lineNumber}`);
                 if (item.state === 1) {
                     lineElement.classList.add('active');
