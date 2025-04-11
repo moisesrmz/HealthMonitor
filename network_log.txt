@@ -34,3 +34,31 @@ Fecha de inicio: 2025-03-04 10:17:20
 Fecha de recuperación: 2025-03-04 10:18:16
 Duración de la caída: 55 segundos (0:00:55)
 ------------------------------------------------------------
+Fecha de inicio: 2025-03-16 08:21:35
+Fecha de recuperación: 2025-03-16 08:22:09
+Duración de la caída: 34 segundos (0:00:34)
+------------------------------------------------------------
+Fecha de inicio: 2025-04-01 07:56:53
+Fecha de recuperación: 2025-04-01 07:57:13
+Duración de la caída: 20 segundos (0:00:20)
+------------------------------------------------------------
+Fecha de inicio: 2025-04-01 13:11:24
+Fecha de recuperación: 2025-04-01 13:11:44
+Duración de la caída: 20 segundos (0:00:20)
+------------------------------------------------------------
+Fecha de inicio: 2025-04-03 16:58:10
+Fecha de recuperación: 2025-04-03 16:58:32
+Duración de la caída: 22 segundos (0:00:22)
+------------------------------------------------------------
+Fecha de inicio: 2025-04-04 11:38:08
+Fecha de recuperación: 2025-04-04 11:46:43
+Duración de la caída: 514 segundos (0:08:34)
+------------------------------------------------------------
+Fecha de inicio: 2025-04-04 11:52:36
+Fecha de recuperación: 2025-04-04 11:54:42
+Duración de la caída: 126 segundos (0:02:06)
+------------------------------------------------------------
+Fecha de inicio: 2025-04-07 08:25:57
+Fecha de recuperación: 2025-04-07 09:09:56
+Duración de la caída: 2638 segundos (0:43:58)
+------------------------------------------------------------
