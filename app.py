@@ -20,6 +20,7 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
 import shutil
 import csv
 
@@ -28,8 +29,10 @@ socketio = SocketIO(app)
 last_reset_time = datetime.datetime.now()
 current_mode = "OEE"
 poee_start_times = defaultdict(lambda: None)
+#poee_inactivity_snapshot = defaultdict(lambda: 0)
 inactivity_accumulated_oee = defaultdict(float)
 inactivity_accumulated_poee = defaultdict(float)
+# Contadores internos de passed válidos (post-descuento)
 activation_pass_counter = defaultdict(int)
 activation_status = defaultdict(lambda: {
     "active": False,
@@ -37,13 +40,18 @@ activation_status = defaultdict(lambda: {
     "discount_fail": 0,
     "current_part_number": None
 })
+
 part_fail_discounts = {}  # Cargado desde CSV
+
+
 pass_fail_counts = defaultdict(lambda: {"Passed": 0, "Failed": 0, "Reference": "", "Test Name": "", "Nombre de la prueba": ""})
 folder_labels = {
-    "P2": "F3",
+    "EOL1": "F1",
     "P3": "F2",
+    "P2": "F3",
     "EOL5": "F4",
     "EOL2": "F5",
+    "EOL3": "F9",
     "EOL4": "F6",
     "EOL6": "F7",
     "EOL7": "F8"
@@ -51,23 +59,33 @@ folder_labels = {
 counts_lock = threading.Lock()
 cycle_times = defaultdict(list)
 last_file_times = defaultdict(lambda: None)
+is_resetting = False  # 🔒 Flag para bloquear entrada durante reseteo
+
 
 class NewFileHandler(FileSystemEventHandler):
     def on_created(self, event):
         if event.is_directory:
             return
+        if is_resetting:
+            print(f"[WAIT] Ignorando archivo durante reset: {event.src_path}")
+            return
         file_path = event.src_path
-        parent_folder = os.path.basename(os.path.dirname(file_path))
+        #parent_folder = os.path.basename(os.path.dirname(file_path))
+        parent_folder = get_line_folder(file_path)
         print(f"[INFO] Nuevo archivo detectado: {file_path}")
+
         with counts_lock:
             line_label = folder_labels.get(parent_folder, "F1")
+
         for attempt in range(5):
             if os.path.exists(file_path):
                 try:
                     timestamp = datetime.datetime.now()
                     calculate_cycle_time(parent_folder, timestamp)
+
                     with open(file_path, 'r') as file:
                         lines = file.readlines()
+
                     passed, failed = 0, 0
                     status, reference, test_name, nombre_prueba = None, None, None, None
                     serial_number, test_date, test_time = None, None, None
@@ -75,6 +93,7 @@ class NewFileHandler(FileSystemEventHandler):
                     failure_line, sFailure = None, None
                     failure_keywords = ["Failed", "*ERROR", "*MISTAKE", "NO MEASUREMENT", ">"]
                     current_table = None
+
                     for line in lines:
                         line = line.strip()
                         if any(keyword in line for keyword in ["Status:", "Final Test Result:", "Resultado final de la prueba:"]):
@@ -82,12 +101,14 @@ class NewFileHandler(FileSystemEventHandler):
                                 status = "Pass"
                             elif any(fail in line for fail in ["Failed", "*FAIL", "Falla"]):
                                 status = "Fail"
+
                         if "Reference:" in line:
                             reference = re.sub(r'^[*,\s]+', '', line.split("Reference:")[-1].strip())
                         elif "Nombre de la prueba:" in line:
                             test_name = re.sub(r'^[*,\s]+', '', line.split("Nombre de la prueba:")[-1].strip())
                         elif "Test Name:" in line:
                             nombre_prueba = re.sub(r'^[*,\s]+', '', line.split("Test Name:")[-1].strip())
+
                         if "Serial number:" in line and not line.startswith("EOL Serial number:"):
                             serial_number = re.sub(r'^[*,\s]+', '', line.split("Serial number:")[-1].strip())
                             if len(serial_number) >= 14:
@@ -111,6 +132,7 @@ class NewFileHandler(FileSystemEventHandler):
                                 serial_number = adjusted.strftime("%y%m%d%H%M%S") + folder_labels.get(parent_folder, "F1")
                             except Exception as e:
                                 print(f"[ERROR] Tiempo inválido: {e}")
+
                         if line.startswith("Measured value") or line.startswith("#"):
                             current_table = "LVResult"
                             continue
@@ -118,13 +140,19 @@ class NewFileHandler(FileSystemEventHandler):
                             current_table = "HVResult"
                             continue
                         if current_table == "LVResult" and line:
-                            LVResult += line + "*\n"
+                            #LVResult += line + "*\n" #se retira el salto de línea
+                            LVResult += line + "*"
                         elif current_table == "HVResult" and line:
-                            HVResult += line + "*\n"
+                            #HVResult += line + "*\n" #se retira el salto de línea
+                            HVResult += line + "*"
+
                     if status == "Fail":
-                        failure_line = next((l for l in LVResult.splitlines() if any(k in l for k in failure_keywords)), None)
+                        failure_line = next((l for l in LVResult.split('*') if any(k in l for k in failure_keywords)), None)
                         if not failure_line:
-                            failure_line = next((l for l in HVResult.splitlines() if any(k in l for k in failure_keywords)), None)
+                            failure_line = next((l for l in HVResult.split('*') if any(k in l for k in failure_keywords)), None)
+                        #failure_line = next((l for l in LVResult.splitlines() if any(k in l for k in failure_keywords)), None)########se ajusta para buscar el asetrisco no el salto de línea
+                        #if not failure_line:
+                        #    failure_line = next((l for l in HVResult.splitlines() if any(k in l for k in failure_keywords)), None)
                         sFailure = "Dielectrico"
                         if failure_line:
                             l = failure_line.lower()
@@ -138,6 +166,8 @@ class NewFileHandler(FileSystemEventHandler):
                                 sFailure = "Alta Resistencia"
                             elif "tpa" in l:
                                 sFailure = "TPA"
+                            elif "lua" in l:
+                                sFailure = "Dielectrico LUA"
                             elif "cpa" in l:
                                 sFailure = "CPA"
                             elif "sello" in l or "seal" in l:
@@ -150,19 +180,16 @@ class NewFileHandler(FileSystemEventHandler):
                                 sFailure = "Corto"
                             elif "high resistance" in l:
                                 sFailure = "Alta Resistencia"
+                    print(f"🚨🚨🚨🚨🚨[DEBUG] status: {status}")
+                    print(f"🚨🚨🚨🚨🚨[DEBUG] Motivo de falla clasificado: {sFailure} | Línea analizada: {failure_line}")
                     current_part = reference or test_name or nombre_prueba
                     prev_part = activation_status[parent_folder]["current_part_number"]
+
                     if current_part and prev_part != current_part:
-                        activation_status[parent_folder].update({
-                            "active": False,
-                            "discount_pass": 2,
-                            "discount_fail": part_fail_discounts.get(current_part, 0),
-                            "current_part_number": current_part
-                        })
-                        activation_pass_counter[parent_folder] = 0
-                        print(f"[🔁 RESET DESCUENTOS] Nueva parte en {parent_folder}: {current_part}")
+                        reset_line_state(parent_folder, current_part)
+
                     real_passed = 0
-                    real_failed = 0
+
                     if not activation_status[parent_folder]["active"]:
                         if status == "Pass":
                             if activation_status[parent_folder]["discount_pass"] > 0:
@@ -172,29 +199,42 @@ class NewFileHandler(FileSystemEventHandler):
                                 activation_pass_counter[parent_folder] += 1
                                 real_passed = 1
                                 print(f"[COUNTED PASS] {parent_folder} - Contador interno: {activation_pass_counter[parent_folder]}")
+
                         elif status == "Fail":
                             if activation_status[parent_folder]["discount_fail"] > 0:
                                 activation_status[parent_folder]["discount_fail"] -= 1
                                 print(f"[SKIP FAIL] {parent_folder} - Remaining: {activation_status[parent_folder]['discount_fail']}")
+                                failed = 0
                             else:
-                                real_failed = 1
+                                failed = 1
+
                         if activation_pass_counter[parent_folder] == 4:
-                            pass_fail_counts[parent_folder]["Passed"] += 4  # ← Agrega los 4 válidos
+                            pass_fail_counts[parent_folder]["Passed"] += 4
+                            real_passed = 0
                             activation_status[parent_folder]["active"] = True
-                            poee_start_times[parent_folder] = timestamp - datetime.timedelta(seconds=60)
+
+                            if not poee_start_times.get(parent_folder):
+                                poee_start_times[parent_folder] = timestamp - datetime.timedelta(seconds=60)
+
                             print(f"[🟢 ACTIVADA] Línea {parent_folder} ACTIVADA tras 6 Passed (2 skip + 4 válidos)")
+
+
                         if not activation_status[parent_folder]["active"]:
                             print(f"[⛔ NO ACTIVA] {parent_folder}, esperando más Passed/Fail")
                             return
+
                     else:
                         if status == "Pass":
                             real_passed = 1
                         elif status == "Fail":
-                            real_failed = 1
+                            failed = 1
+
+
                     oee_data = calculate_oee(parent_folder)
                     adjusted_elapsed_time = oee_data["adjusted_elapsed_time"]
                     if parent_folder not in inactivity_accumulated_oee:
                         inactivity_accumulated_oee[parent_folder] = adjusted_elapsed_time
+
                     data_to_insert = {
                         "SerialNumber": serial_number,
                         "PartNumber": current_part,
@@ -208,14 +248,21 @@ class NewFileHandler(FileSystemEventHandler):
                         "LVResult": LVResult,
                         "HVResult": HVResult
                     }
-                    insert_test_result(data_to_insert)
-                    print("\n################################################################################################")
+                    #insert_test_result(data_to_insert)  # ← Descomenta cuando esté listo
+
                     with counts_lock:
                         pass_fail_counts[parent_folder]["Passed"] += real_passed
-                        pass_fail_counts[parent_folder]["Failed"] += real_failed
+                        print(
+                            f"[DEBUG] Resultado: {status}, Línea: {parent_folder}, "
+                            f"Active: {activation_status[parent_folder]['active']}, "
+                            f"Discount FAILs left: {activation_status[parent_folder]['discount_fail']}, "
+                            f"Contado como Fail: {failed}"
+                        )
+                        pass_fail_counts[parent_folder]["Failed"] += failed
                         pass_fail_counts[parent_folder]["Reference"] = reference or "N/A"
                         pass_fail_counts[parent_folder]["Test Name"] = test_name or "N/A"
                         pass_fail_counts[parent_folder]["Nombre de la prueba"] = nombre_prueba or "N/A"
+
                     emit_data()
                     return
                 except PermissionError:
@@ -225,11 +272,33 @@ class NewFileHandler(FileSystemEventHandler):
                     return
             else:
                 time.sleep(0.5)
+
+
+
+# Diccionario para almacenar tiempos de inactividad acumulados por línea
 inactivity_start_time = {}
 flag_state = defaultdict(lambda: False)
+# NUEVAS VARIABLES GLOBALES
 inactivity_start_time_oee = {}
 inactivity_start_time_poee = {}
 inactivity_state = defaultdict(lambda: False)  # True = inactivo
+
+def get_line_folder(file_path):
+    parts = os.path.normpath(file_path).split(os.sep)
+    # Busca la cadena 'LogFiles' en minúsculas para evitar case sensitive
+    parts_lower = [p.lower() for p in parts]
+    try:
+        idx = parts_lower.index("logfiles")
+        if idx + 1 < len(parts):
+            line_name = parts[idx + 1].strip()
+            print(f"[DEBUG] Línea detectada: {line_name} (en path: {file_path})")
+            return line_name
+        else:
+            print(f"[WARNING] No hay línea después de 'LogFiles': {file_path}")
+            return "Unknown"
+    except ValueError:
+        print(f"[WARNING] 'LogFiles' no está en el path: {file_path}")
+        return "Unknown"
 
 def emit_data():
     global flag
@@ -282,11 +351,16 @@ def emit_data():
                     inactivity_accumulated_poee[parent_folder] += elapsed_poee
                     inactivity_start_time_poee[parent_folder] = now
                     print(f"[➕ POEE] +{elapsed_poee:.2f}s acumulados en {parent_folder}")
+
+            # Marcar como inactivo (una vez)
             inactivity_state[parent_folder] = True
         else:
+            # Línea activa: reset de tiempos
             inactivity_state[parent_folder] = False
             inactivity_start_time_oee.pop(parent_folder, None)
             inactivity_start_time_poee.pop(parent_folder, None)
+
+        # Calcular métricas OEE
         oee_data = calculate_oee(parent_folder)
 
         data.append({
@@ -317,42 +391,81 @@ def calculate_oee(line):
     global last_reset_time
     now = datetime.datetime.now()
     if current_mode == "POEE":
-        start_time = poee_start_times.get(line, now)
+        start_time = poee_start_times.get(line)
+        if not start_time:
+            if activation_status[line]["active"]:
+                print(f"[WARN] Línea {line} activa sin poee_start_time. Asignando ahora.")
+                start_time = now
+                poee_start_times[line] = now
+            else:
+                # Línea no activa, no debería contar tiempo aún
+                print(f"[INFO] Línea {line} aún no activada. No se cuenta tiempo.")
+                return {
+                    "line": line,
+                    "line_label": folder_labels.get(line, line),
+                    "shift": determine_shift(now.strftime("%H:%M:%S")),
+                    "elapsed_time": 0,
+                    "proportional_break_time": 0,
+                    "adjusted_elapsed_time": 0,
+                    "inactive_time": 0,
+                    "adjusted_inactive_time": 0,
+                    "operational_time": 0,
+                    "good_pieces": 0,
+                    "total_pieces": 0,
+                    "availability": 0,
+                    "performance": 0,
+                    "quality": 0,
+                    "oee": 0
+                }
         elapsed_time = (now - start_time).total_seconds()
     else:
         elapsed_time = (now - last_reset_time).total_seconds()
-    if current_mode == "POEE":
-        print(f"[⏱️ POEE] Línea: {line} | Activada en: {start_time.strftime('%Y-%m-%d %H:%M:%S')} | Tiempo transcurrido: {elapsed_time:.2f}s")
-    else:
-        print(f"[⏱️ OEE] Línea: {line} | Último reinicio: {last_reset_time.strftime('%Y-%m-%d %H:%M:%S')} | Tiempo transcurrido: {elapsed_time:.2f}s")
+    # Imprimir tiempos para comparar
+    #if current_mode == "POEE":
+    #    print(f"[⏱️ POEE] Línea: {line} | Activada en: {start_time.strftime('%Y-%m-%d %H:%M:%S')} | Tiempo transcurrido: {elapsed_time:.2f}s")
+    #else:
+    #    print(f"[⏱️ OEE] Línea: {line} | Último reinicio: {last_reset_time.strftime('%Y-%m-%d %H:%M:%S')} | Tiempo transcurrido: {elapsed_time:.2f}s")
+
+    # Definir tiempos de ciclo ideales por número de parte convertido a segundos
     ideal_cycle_times = {
         "2098700356": 3600/165,  # 165/hr
         "2098700316": 3600/150,  # 150/hr
         "2098700154": 3600/165,  # 165/hr
         "2098700083": 3600/165,  # 165/hr
-        "2154170050": 3600/55,  # 55/hr
-        "2154170052": 3600/72,  # 72/hr
-        "2154150582": 3600/150,   # 150/hr
-        "2154170049": 3600/72  # 72/hr
+        "2154170050": 3600/75,   # 75/hr     cambio a 75 desde 55
+        "2154170052": 3600/72,   # 72/hr   
+        "2154150582": 3600/165,  # 165/hr    cambio a 165 desde 150
+        "2154170049": 3600/72    # 72/hr
     }
+
+
     if line not in pass_fail_counts:
         print(f"[ERROR] Línea {line} no encontrada en pass_fail_counts. Usando N/A")
         part_number = "N/A"
     else:
+        # ✅ Obtener el número de parte correctamente
         part_number = pass_fail_counts[line].get("Reference", None)
         if not part_number or part_number == "N/A":
             part_number = pass_fail_counts[line].get("Test Name", None)
         if not part_number or part_number == "N/A":
             part_number = pass_fail_counts[line].get("Nombre de la prueba", "N/A")
+
+
+
+    # Asignar tiempo de ciclo ideal basado en el número de parte (10 seg por defecto)
     if line[0].isdigit():
         ideal_cycle_time = 3600 / 264  # Si la línea comienza con un número, usar 3600/264
-        print(f"[VALIDACIÓN] Línea {line} comienza con un número. Asignando ideal_cycle_time: {ideal_cycle_time:.2f} segundos")
+        #print(f"[VALIDACIÓN] Línea {line} comienza con un número. Asignando ideal_cycle_time: {ideal_cycle_time:.2f} segundos")
     elif part_number in ideal_cycle_times:
         ideal_cycle_time = ideal_cycle_times[part_number]  # Usar el valor del diccionario si el número de parte está definido
-        print(f"[VALIDACIÓN] Número de parte detectado: {part_number} - Asignando ideal_cycle_time: {ideal_cycle_time:.2f} segundos")
+        #print(f"[VALIDACIÓN] Número de parte detectado: {part_number} - Asignando ideal_cycle_time: {ideal_cycle_time:.2f} segundos")
     else:
         ideal_cycle_time = 3600 / 340  # Valor por defecto si no se cumplen las otras reglas
-        print(f"[VALIDACIÓN] Número de parte no encontrado en la lista. Usando valor por defecto: {ideal_cycle_time:.2f} segundos")
+        #print(f"[VALIDACIÓN] Número de parte no encontrado en la lista. Usando valor por defecto: {ideal_cycle_time:.2f} segundos")
+
+
+
+    # Definir duraciones de turno en segundos
     shift_durations = {
         "T1": 8 * 3600,  # 8 horas en segundos
         "T2": 7.5 * 3600,  # 7.5 horas en segundos
@@ -362,39 +475,55 @@ def calculate_oee(line):
     current_time = now.strftime("%H:%M:%S")
     current_shift = determine_shift(current_time)
     current_shift_duration = shift_durations[current_shift]
+
+    # Calcular tiempo proporcional de descanso
     break_time = 2700  # 45 minutos (30 min comedor + 10 min de break + 5 min ejercicios)
     proportional_break_time = (elapsed_time / current_shift_duration) * break_time
-    #adjusted_elapsed_time = max(0, elapsed_time - proportional_break_time) #se intercambia por que ya se esta descontando el tiempo proporcional de breaks en inactividad.
+
+    # Calcular tiempo ajustado restando descansos
     adjusted_elapsed_time = elapsed_time
+
     line_label = folder_labels.get(line, line)
+
+    # Obtener tiempo de inactividad acumulado
     if current_mode == "POEE":
         inactive_time = inactivity_accumulated_poee.get(line, 0)
     else:
         inactive_time = inactivity_accumulated_oee.get(line, 0)
+
+    # Ajustar el tiempo de inactividad restando los descansos proporcionales
     adjusted_inactive_time = max(0, inactive_time - proportional_break_time)
+    # Calcular tiempo operativo
     operational_time = max(0, adjusted_elapsed_time - adjusted_inactive_time)
+
+    # Obtener datos de piezas
     good_pieces = pass_fail_counts[line].get("Passed", 0)
     total_pieces = good_pieces + pass_fail_counts[line].get("Failed", 0)
+
+    # Calculo de KPI's
     availability = (adjusted_elapsed_time - adjusted_inactive_time) / adjusted_elapsed_time if adjusted_elapsed_time > 0 else 0
     performance = (good_pieces * ideal_cycle_time) / operational_time if good_pieces > 0 and operational_time > 0 else 0
     quality = good_pieces / total_pieces if total_pieces > 0 else 0
     oee = availability * performance * quality
+
+    # Depuración de los KPI calculados
     print(f"[INFO] Línea: {line} (Label: {line_label})")
     print(f"[INFO] Número de parte detectado: {part_number}")
-    print(f"[INFO] Tiempo de ciclo ideal aplicado: {ideal_cycle_time} segundos")
-    print(f"[INFO] Tiempo Total Transcurrido: {elapsed_time:.2f}s")
-    print(f"[INFO] Tiempo de Comedor Proporcional: {proportional_break_time:.2f}s")
-    print(f"[INFO] Tiempo Ajustado: {adjusted_elapsed_time:.2f}s")
-    print(f"[INFO] Tiempo Inactivo Acumulado: {inactive_time:.2f}s")
-    print(f"[INFO] Tiempo Inactivo Ajustado: {adjusted_inactive_time:.2f}s")
-    print(f"[INFO] Tiempo Operativo: {operational_time:.2f}s")
-    print(f"[INFO] Piezas Buenas: {good_pieces}")
-    print(f"[INFO] Piezas Totales: {total_pieces}")
-    print(f"[INFO] Disponibilidad (Availability): {availability:.2%}")
-    print(f"[INFO] Rendimiento (Performance): {performance:.2%}")
-    print(f"[INFO] Calidad (Quality): {quality:.2%}")
-    print(f"[INFO] OEE: {oee:.2%}")
-    print(f"*******************************************")
+    #print(f"[INFO] Tiempo de ciclo ideal aplicado: {ideal_cycle_time} segundos")
+    #print(f"[INFO] Tiempo Total Transcurrido: {elapsed_time:.2f}s")
+    #print(f"[INFO] Tiempo de Comedor Proporcional: {proportional_break_time:.2f}s")
+    #print(f"[INFO] Tiempo Ajustado: {adjusted_elapsed_time:.2f}s")
+    #print(f"[INFO] Tiempo Inactivo Acumulado: {inactive_time:.2f}s")
+    #print(f"[INFO] Tiempo Inactivo Ajustado: {adjusted_inactive_time:.2f}s")
+    #print(f"[INFO] Tiempo Operativo: {operational_time:.2f}s")
+    #print(f"[INFO] Piezas Buenas: {good_pieces}")
+    #print(f"[INFO] Piezas Totales: {total_pieces}")
+    #print(f"[INFO] Disponibilidad (Availability): {availability:.2%}")
+    #print(f"[INFO] Rendimiento (Performance): {performance:.2%}")
+    #print(f"[INFO] Calidad (Quality): {quality:.2%}")
+    #print(f"[INFO] OEE: {oee:.2%}")
+    print(f"********************************************************************************************************************")
+
     return {
         "line": line,
         "line_label": line_label,
@@ -432,8 +561,8 @@ def calculate_cycle_time(line, timestamp):
     last_time = last_file_times[line]
     if last_time is not None:
         cycle_time = (timestamp - last_time).total_seconds()
-        if cycle_time >= 5.0:  
-            cycle_times[line].append(cycle_time)  
+        if cycle_time >= 0.05:  # Cambiado a 5 segundos
+            cycle_times[line].append(cycle_time)
             print(f"[INFO] Tiempo de ciclo calculado para la línea {line}: {cycle_time:.2f}s")
             if len(cycle_times[line]) > 50:  #aqui se ajusta la cantidad de tiempos a promediar
                 cycle_times[line].pop(0)
@@ -448,8 +577,13 @@ def get_average_cycle_time(line, upper_percentile=96):
     if times:
         if len(times) == 1:
             return times[0]  # Devuelve el primer tiempo registrado en lugar de N/A
+
+        # Calcular percentil superior (por defecto el 95%)
         upper_bound = np.percentile(times, upper_percentile)
+
+        # Filtrar valores que están por debajo del percentil superior
         filtered_times = [t for t in times if t <= upper_bound]
+
         if len(filtered_times) > 0:
             return sum(filtered_times) / len(filtered_times)  # Calcular promedio sin valores altos
         else:
@@ -457,14 +591,16 @@ def get_average_cycle_time(line, upper_percentile=96):
 
     return None  # Si no hay registros, devuelve None
 
+
 def periodic_update(interval=30):
     """
     Función para emitir datos cada 'interval' segundos.
     """
     while True:
         with counts_lock:
-            emit_data()
+            emit_data()  # Llama a la función que emite los datos
         time.sleep(interval)
+
 
 def monitor_directory(path):
     event_handler = NewFileHandler()
@@ -536,18 +672,27 @@ def start_monitoring():
             if outage_start_time is None:
                 outage_start_time = datetime.datetime.now()
                 print(f"[WARNING] Red caída desde {outage_start_time.strftime('%Y-%m-%d %H:%M:%S')}")
+
             if observer.is_alive():
                 observer.stop()  # 🔹 Detiene el observador si la red se cae
                 observer.join()  # 🔹 Esperar a que el hilo se cierre antes de continuar
                 print("[INFO] Watchdog detenido debido a la caída de la red.")
+
             print("[WARNING] No se puede acceder a la red. Esperando reconexión...")
-            time.sleep(CHECK_INTERVAL)
+            time.sleep(CHECK_INTERVAL)  # 🔹 Revisar más frecuentemente si la red vuelve
+
+##############################################################################################
 
 def reset_all_values():
+    global is_resetting
+    is_resetting = True  # 🛑 Bloquear archivos mientras se limpia todo
+
     global pass_fail_counts, cycle_times, inactivity_start_time_oee, inactivity_start_time_poee
     global last_reset_time, last_file_times, flag_state, inactivity_state
     global inactivity_accumulated_oee, inactivity_accumulated_poee, poee_start_times
-    load_fail_discounts()
+
+    load_fail_discounts()  # Cargar descuentos desde CSV
+
     with counts_lock:
         pass_fail_counts.clear()
         cycle_times.clear()
@@ -560,7 +705,32 @@ def reset_all_values():
         inactivity_start_time_poee.clear()
         inactivity_state.clear()
         last_reset_time = datetime.datetime.now()
+
+        # 🔁 Reiniciar todas las líneas con descuentos correctos
+        for line in folder_labels:
+            current_part = "DEFAULT"
+            activation_status[line] = {
+                "active": False,
+                "discount_pass": 2,
+                "discount_fail": part_fail_discounts.get(current_part, 0),
+                "current_part_number": current_part
+            }
+            activation_pass_counter[line] = 0
+            poee_start_times[line] = None
+            pass_fail_counts[line] = {
+                "Passed": 0,
+                "Failed": 0,
+                "Reference": "",
+                "Test Name": "",
+                "Nombre de la prueba": ""
+            }
+            cycle_times[line] = []
+            last_file_times[line] = None
+            print(f"[🔁 RESET STATUS] {line} - Descuentos: Pass=2, Fail={part_fail_discounts.get(current_part, 0)}")
+
     print("[INFO] ¡Se han reseteado todas las métricas y valores acumulados!")
+
+    # 🔄 Emitir data limpia al frontend
     zero_data = []
     for line_label in folder_labels.values():
         zero_data.append({
@@ -582,8 +752,11 @@ def reset_all_values():
             "inactive_time": 0,
             "elapsed_time": 0,
         })
+
     socketio.emit('update_data', zero_data)
     socketio.emit('reset_data')
+    is_resetting = False  # ✅ Liberar el lock
+
     print("[INFO] Datos de la interfaz reiniciados y gráficos restablecidos.")
 
 def capture_screenshot():
@@ -592,21 +765,29 @@ def capture_screenshot():
         chrome_options.add_argument("--headless")  # Modo sin interfaz gráfica
         chrome_options.add_argument("--no-sandbox")
         chrome_options.add_argument("--disable-dev-shm-usage")
-        chrome_options.add_argument("--start-maximized")
+        #chrome_options.add_argument("--start-maximized")
         #chrome_options.add_argument("--force-device-scale-factor=0.8")
         chrome_options.add_argument("--window-size=1920,1080")  # Tamaño de la ventana
+
         driver = webdriver.Chrome(options=chrome_options)
+        driver.set_window_size(1920, 1080)
         dashboard_url = "http://127.0.0.1:5000"  # Asegúrate de usar la URL correcta
         driver.get(dashboard_url)
         driver.execute_script("document.body.style.zoom='80%'")
+        #driver.set_window_size(1920, 1080)  # Configurar tamaño de ventana Full HD
+        # Esperar unos segundos para cargar la página completamente
         time.sleep(4)
         emit_data()
         time.sleep(1)
+        # Crear carpeta de capturas si no existe
         os.makedirs("screenshots", exist_ok=True)
+
+        # Guardar la captura de pantalla con marca de tiempo
         timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
         screenshot_filename = f"screenshots/dashboard_{timestamp}.png"
         driver.save_screenshot(screenshot_filename)
         driver.quit()
+
         print(f"[INFO] Captura de pantalla guardada en {screenshot_filename}")
     except Exception as e:
         print(f"[ERROR] Error al capturar la pantalla: {e}")
@@ -615,27 +796,40 @@ def schedule_resets():
     while True:
         now = datetime.datetime.now()
         reset_times = [
-            datetime.time(6, 25),   # Reinicio a las 6:25 AM
-            datetime.time(14, 25),  # Reinicio a las 2:25 PM
-            datetime.time(21, 55),   # Reinicio a las 9:55 PM
+            datetime.time(6, 25),   # Reinicio a las 6:30 AM
+            datetime.time(14, 25),  # Reinicio a las 2w:30 PM
+            datetime.time(21, 55),   # Reinicio a las 10:00 PM
         ]
+
         next_reset = None
+
+        # Encontrar el próximo reinicio en el mismo día
         for reset_time in reset_times:
             today_reset = datetime.datetime.combine(now.date(), reset_time)
             if now < today_reset:
                 next_reset = today_reset
                 break
+
+        # Si no hay reinicio pendiente hoy, programarlo para el primer horario del día siguiente
         if next_reset is None:
             next_reset = datetime.datetime.combine(now.date() + datetime.timedelta(days=1), reset_times[0])
+
         sleep_seconds = (next_reset - now).total_seconds()
         print(f"[INFO] Próximo reinicio programado a las {next_reset.strftime('%Y-%m-%d %H:%M:%S')}")
+
         time.sleep(sleep_seconds)  # Esperar hasta el momento del reinicio
         print("[INFO] Capturando la pantalla antes del reinicio...")
+
+        
         capture_screenshot()  # Capturar la pantalla antes del reinicio
         reset_all_values()
 
+
 SHAREPOINT_USER = ""
 SHAREPOINT_PASS = ""
+
+
+
 
 def login_to_sharepoint(driver, wait):
     try:
@@ -650,18 +844,22 @@ def login_to_sharepoint(driver, wait):
         password_input.send_keys(SHAREPOINT_PASS)
         driver.find_element(By.ID, "idSIButton9").click()
         print("[✅] Contraseña ingresada")
+
+        # Paso 3: Mantener sesión
         try:
             stay_signed_in = wait.until(EC.presence_of_element_located((By.ID, "idSIButton9")))
             stay_signed_in.click()
             print("[🔐] Mantener sesión activado")
         except:
             print("[ℹ️] Botón de mantener sesión no apareció (puede estar cacheado)")
+
     except Exception as e:
         print(f"[❌] Error durante el login: {e}")
 
 def capture_scorecard():
     try:
         chrome_options = Options()
+
         # ✅ Mostrar navegador para login manual
         chrome_options.add_argument("--start-maximized")
         chrome_options.add_argument("--headless")  # ← Actívalo luego del primer login
@@ -684,7 +882,7 @@ def capture_scorecard():
 
         # Espera tiempo para login manual la primera vez
         print("[⏳] Tienes 60 segundos para loguearte si es necesario...")
-        time.sleep(5)####aqui cambiar el tiempo para loggeo manual
+        time.sleep(5)
 
         # ✅ Ocultar el ribbon y headers de la UI
         print("[🧼] Ocultando ribbon, headers y pie de página...")
@@ -702,11 +900,17 @@ def capture_scorecard():
         # ✅ Zoom y scroll para vista clara
         driver.execute_script("document.body.style.zoom='130%'")
         driver.execute_script("window.scrollTo(0, 0);")
+
+        # ✅ Captura y guardado
+        # ✅ Captura y guardado
         os.makedirs("static/images", exist_ok=True)
         timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
         screenshot_path = f"static/images/scorecard_{timestamp}.png"
         driver.save_screenshot(screenshot_path)
+
+        # ✅ Sobrescribe scorecard.png
         shutil.copyfile(screenshot_path, "static/images/scorecard.png")
+        # 🔥 Borrar capturas anteriores (excepto la recién creada)
         for fname in os.listdir("static/images"):
             if fname.startswith("scorecard_") and fname.endswith(".png") and fname != os.path.basename(screenshot_path):
                 try:
@@ -714,7 +918,12 @@ def capture_scorecard():
                     print(f"[🗑️] Eliminada: {fname}")
                 except Exception as e:
                     print(f"[⚠️] No se pudo eliminar {fname}: {e}")
+
+
         driver.quit()
+        print(f"[📸] Captura de Scorecard guardada en: {screenshot_path}")
+
+
         print(f"[📸] Captura de Scorecard guardada en: {screenshot_path}")
     except Exception as e:
         print(f"[❌ ERROR] Falló la captura automática: {e}")
@@ -737,6 +946,34 @@ def load_fail_discounts():
     except Exception as e:
         print(f"[ERROR] Falló la carga de QTYnegatives.csv: {e}")
 
+def reset_line_state(line_name, new_part_number):
+    activation_status[line_name] = {
+        "active": False,
+        "discount_pass": 2,
+        "discount_fail": part_fail_discounts.get(new_part_number, 0),
+        "current_part_number": new_part_number
+    }
+    activation_pass_counter[line_name] = 0
+    poee_start_times.pop(line_name, None)
+    inactivity_start_time_oee.pop(line_name, None)
+    inactivity_start_time_poee.pop(line_name, None)
+    inactivity_accumulated_oee[line_name] = 0
+    inactivity_accumulated_poee[line_name] = 0
+    inactivity_state[line_name] = False
+    pass_fail_counts[line_name] = {
+        "Passed": 0,
+        "Failed": 0,
+        "Reference": "",
+        "Test Name": "",
+        "Nombre de la prueba": ""
+    }
+    cycle_times[line_name] = []
+    last_file_times[line_name] = None
+    print(f"[🧼 RESET TOTAL] Línea {line_name} reiniciada por cambio de parte: {new_part_number}")
+    emit_data()  # 🔁 Emitir actualización inmediata al frontend
+
+
+
 @app.route('/')
 def index():
     return render_template('index.html')
@@ -748,23 +985,89 @@ def set_mode(mode):
         print(f"[MODE] Modo de cálculo actualizado a: {current_mode}")
         return jsonify({"status": "ok", "mode": current_mode})
     return jsonify({"status": "error", "message": "Modo inválido"}), 400
+########################################################################################new functions
+from flask import send_file, make_response
+import io
+import csv
+
+@app.route("/historico")
+def historico():
+    return render_template("historico.html")
+
+
+@app.route("/fetch_historico_data", methods=["POST"])
+def fetch_historico_data_route():
+    try:
+        data = request.get_json()
+        start_date = data.get("start_date")
+        end_date = data.get("end_date")
+        part_number = data.get("part_number")
+
+        # Llama a la nueva función que acepta part_number como argumento
+        results = fetch_historico_data(start_date, end_date, part_number)
+
+        return jsonify(results or [])
+    except Exception as e:
+        print(f"[ERROR] fetch_historico_data_route: {e}")
+        return jsonify([])
+
+
+
+@app.route("/download_csv")
+def download_csv():
+    try:
+        start_date = request.args.get("start_date")
+        end_date = request.args.get("end_date")
+        part_number = request.args.get("part_number")
+
+        all_results = fetch_historico_data(start_date, end_date)
+        if part_number:
+            filtered = [r for r in all_results if r.get("PartNumber") == part_number]
+        else:
+            filtered = all_results
+
+        si = io.StringIO()
+        writer = csv.DictWriter(si, fieldnames=[
+            "SerialNumber", "PartNumber", "TestDate", "TestTime", "Shift", "FALine",
+            "Tester", "TestResult", "Failure", "LVResult", "HVResult"
+        ])
+        writer.writeheader()
+        writer.writerows(filtered)
+
+        output = make_response(si.getvalue())
+        output.headers["Content-Disposition"] = "attachment; filename=historico_resultados.csv"
+        output.headers["Content-type"] = "text/csv"
+        return output
+    except Exception as e:
+        print(f"[ERROR] download_csv: {e}")
+        return "Error generando CSV", 500
+#####################################################################new ends
+
 
 # Enlace público al Excel
 SHAREPOINT_EXCEL_URL = "https://kochind-my.sharepoint.com/:x:/g/personal/jose_cervantes_molex_com/EV9brc5o2WxKt1ELcdRFw9cB9-Fe12M_LuK4d7tF7DScjA?email=functional.test%40molex.com&e=xOjsMh"
+
+
 
 if __name__ == '__main__':
     #path_to_monitor = r"\\mlxgumvwfile01\Departamentos\Fakra\Pruebas\LogFiles"
     load_fail_discounts()
     monitor_thread = threading.Thread(target=start_monitoring, daemon=True)
     monitor_thread.start()
+
     periodic_thread = threading.Thread(target=periodic_update, daemon=True)##hilo de actualizacion
     periodic_thread.start()
+
     reset_thread = threading.Thread(target=schedule_resets, daemon=True)##hilo de reseteo programado
     reset_thread.start()
+
     def schedule_scorecard_updates(interval=600):
         while True:
             capture_scorecard()
             time.sleep(interval)
+
     scorecard_thread = threading.Thread(target=schedule_scorecard_updates, daemon=True)
     scorecard_thread.start()
+
+
     socketio.run(app, host="0.0.0.0", port=5000, use_reloader=False)

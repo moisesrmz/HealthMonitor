@@ -91,35 +91,44 @@ DB_CONFIG = {
     "database": "healthmonitor"
 }
 
-def fetch_historico_data(start_date, end_date):
+def fetch_historico_data(start_date, end_date, part_number=None):
     """
     Consulta los datos históricos entre dos fechas en la tabla TestResults.
+    Si se proporciona un part_number, filtra también por coincidencia parcial.
 
     :param start_date: Fecha de inicio en formato "YYYY-MM-DD"
     :param end_date: Fecha de fin en formato "YYYY-MM-DD"
-    :return: Lista de resultados de la base de datos
+    :param part_number: (opcional) Parte a filtrar
+    :return: Lista de resultados
     """
-    query = """
+    base_query = """
         SELECT SerialNumber, PartNumber, TestDate, TestTime, Shift, FALine, Tester, TestResult, Failure, LVResult, HVResult
         FROM TestResults
         WHERE TestDate BETWEEN %s AND %s
     """
+    params = [start_date, end_date]
+
+    if part_number:
+        base_query += " AND PartNumber LIKE %s"
+        params.append(f"%{part_number}%")
+
     try:
         connection = pymysql.connect(**DB_CONFIG)
         with connection.cursor(pymysql.cursors.DictCursor) as cursor:
-            cursor.execute(query, (start_date, end_date))
+            cursor.execute(base_query, params)
             results = cursor.fetchall()
 
-            # Convertir objetos no serializables a tipos compatibles con JSON
+            # Formatear tipos especiales a texto compatible JSON
             for row in results:
                 for key, value in row.items():
-                    if isinstance(value, timedelta):  # Convertir timedelta a string
+                    if isinstance(value, timedelta):
                         row[key] = str(value)
-                    elif isinstance(value, date):  # Convertir date a string
+                    elif isinstance(value, date):
                         row[key] = value.strftime("%Y-%m-%d")
-                    elif isinstance(value, datetime):  # Convertir datetime a string
+                    elif isinstance(value, datetime):
                         row[key] = value.strftime("%Y-%m-%d %H:%M:%S")
             return results
+
     except pymysql.MySQLError as e:
         print(f"[ERROR] Error al consultar datos históricos: {e}")
         return None

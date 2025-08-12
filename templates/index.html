@@ -10,6 +10,9 @@
 </head>
 <body>
     <div class="header-wrapper">
+        <div class="left-button-container">
+            <button id="registros-btn">Registros</button>
+        </div>
         <h1 id="main-title">POEE DASHBOARD EOL TESTERS [FA]</h1>
         <div class="switch-toggle">
             <span>OEE</span>
@@ -241,7 +244,27 @@
             width: 0;
             height: 0;
         }
+        .left-button-container {
+        position: absolute;
+        left: 70px;  /* Antes: 20px — ahora se corre un poco a la derecha */
+        top: 50%;
+        transform: translateY(-50%);
+        }
+        #registros-btn {
+            background-color: #4cd964;
+            color: white;
+            border: none;
+            border-radius: 10px;
+            padding: 6px 14px;
+            font-size: 0.9em;
+            cursor: pointer;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+            transition: background-color 0.3s ease;
+        }
 
+        #registros-btn:hover {
+            background-color: #4cd964;
+        }
         .slider {
             position: absolute;
             cursor: pointer;
@@ -610,7 +633,9 @@
         img.src = `/static/images/scorecard.png?ts=${timestamp}`;
     }
 
-
+    document.getElementById("registros-btn").addEventListener("click", () => {
+        window.open("/historico", "_blank");
+    });
     </script>
 <!-- Contenedor oculto para el Scorecard -->
 
