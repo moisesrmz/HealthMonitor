@@ -138,7 +138,7 @@
             <canvas id="yield-date-chart" height="78"></canvas>
         </div>
         <div class="chart-container">
-            <div class="chart-title">Yield (%) Promedio por PartNumber</div>
+            <div class="chart-title">Yield (%) Promedio por PN</div>
             <canvas id="yield-part-chart" height="90"></canvas>
         </div>
     </div>
@@ -401,6 +401,7 @@
             const idx = points[0].index;
             mostrarGraficaFallas(partLabels[idx]);
         };
+        generarInsightsYForecast();
     });
 
     function mostrarGraficaFallas(partNumber) {
@@ -421,7 +422,7 @@
         const sortedValues = pairs.map(p=>p.v);
 
         document.getElementById('failures-title').textContent =
-            `Fallas encontradas para el PartNumber "${partNumber}". OK: ${okCount}`;
+            `Desglose de fallas para el PN "${partNumber}". OK: ${okCount}`;
 
         if (failuresChart) failuresChart.destroy();
         failuresChart = new Chart(document.getElementById('failures-chart').getContext('2d'), {
@@ -469,5 +470,95 @@
         window.open("/download_csv", "_blank");
     });
     </script>
+    <!-- INSIGHTS Y FORECAST -->
+    <div id="insights-container" style="display:none; max-width:900px; margin:40px auto; background:#fdfdfd; border-radius:10px; padding:20px; box-shadow:0 0 15px rgba(0,0,0,0.05);">
+        <h2 style="text-align:center; color:#444; font-weight:500; margin-bottom:15px;">📊 Insights y Forecast</h2>
+        <div id="insights-content" style="font-size:1rem; line-height:1.5; color:#333;"></div>
+    </div>
+
+    <script>
+    function generarInsightsYForecast() {
+        if (!filteredData.length) return;
+
+        let totalPassed = 0, totalTests = 0;
+        const yieldPorDia = {};
+        const fallasCount = {};
+        const pnStats = {};
+
+        filteredData.forEach(row => {
+            const fecha = row["TestDate"];
+            const pn = row["PartNumber"];
+            const pass = (row["TestResult"] || "").toUpperCase() === "PASS";
+            const falla = (row["Failure"] || "").trim();
+
+            if (!yieldPorDia[fecha]) yieldPorDia[fecha] = { passed:0, total:0 };
+            yieldPorDia[fecha].total++;
+            if (pass) yieldPorDia[fecha].passed++;
+
+            if (!pnStats[pn]) pnStats[pn] = { passed:0, total:0 };
+            pnStats[pn].total++;
+            if (pass) pnStats[pn].passed++;
+
+            if (!pass && falla && falla.toUpperCase() !== "N/A" && falla.toUpperCase() !== "PASS") {
+                fallasCount[falla] = (fallasCount[falla] || 0) + 1;
+            }
+
+            totalTests++;
+            if (pass) totalPassed++;
+        });
+
+        // Yield global
+        const yieldGlobal = (totalPassed / totalTests) * 100;
+
+        // Tendencia de yield (últimos 5 días vs anteriores 5)
+        const fechasOrdenadas = Object.keys(yieldPorDia).sort();
+        const ultimos = fechasOrdenadas.slice(-5);
+        const anteriores = fechasOrdenadas.slice(-10, -5);
+
+        const promUltimos = ultimos.length ? ultimos.reduce((a,f) => a + (yieldPorDia[f].passed / yieldPorDia[f].total)*100, 0) / ultimos.length : yieldGlobal;
+        const promAnteriores = anteriores.length ? anteriores.reduce((a,f) => a + (yieldPorDia[f].passed / yieldPorDia[f].total)*100, 0) / anteriores.length : yieldGlobal;
+
+        const tendencia = promUltimos > promAnteriores ? "↑ mejora" : (promUltimos < promAnteriores ? "↓ caída" : "→ estable");
+
+        // Top 3 peores PN
+        const pnOrdenados = Object.entries(pnStats)
+            .map(([pn, stats]) => ({ pn, yield: (stats.passed / stats.total) * 100 }))
+            .sort((a,b) => a.yield - b.yield)
+            .slice(0, 3);
+
+        // Top 3 fallas
+        const fallasOrdenadas = Object.entries(fallasCount)
+            .sort((a,b) => b[1] - a[1])
+            .slice(0,3);
+
+        // Forecast simple (regresión lineal)
+        const yVals = fechasOrdenadas.map(f => (yieldPorDia[f].passed / yieldPorDia[f].total) * 100);
+        const xVals = fechasOrdenadas.map((_, i) => i + 1);
+
+        const n = xVals.length;
+        const sumX = xVals.reduce((a,b)=>a+b,0);
+        const sumY = yVals.reduce((a,b)=>a+b,0);
+        const sumXY = xVals.reduce((a,b,i)=>a+b*yVals[i],0);
+        const sumX2 = xVals.reduce((a,b)=>a+b*b,0);
+        const slope = (n*sumXY - sumX*sumY) / (n*sumX2 - sumX*sumX);
+        const intercept = (sumY - slope*sumX) / n;
+
+        const forecast7dias = slope * (n+7) + intercept;
+
+        // Render
+        let html = `
+            <b>Yield global:</b> ${yieldGlobal.toFixed(2)}% (${tendencia} respecto a la última semana)<br>
+            <b>Top 3 PN críticos:</b><br>
+            <ul>${pnOrdenados.map(p => `<li>${p.pn}: ${p.yield.toFixed(1)}%</li>`).join("")}</ul>
+            <b>Principales fallas:</b><br>
+            <ul>${fallasOrdenadas.map(f => `<li>${f[0]} (${f[1]} casos)</li>`).join("")}</ul>
+            <b>Forecast:</b> Yield estimado en 7 días: ${forecast7dias.toFixed(2)}%
+        `;
+
+        document.getElementById("insights-content").innerHTML = html;
+        document.getElementById("insights-container").style.display = "block";
+    }
+    </script>
+
 </body>
 </html>
