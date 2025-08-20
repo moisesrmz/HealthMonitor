@@ -110,3 +110,19 @@ Fecha de inicio: 2025-08-12 16:17:39
 Fecha de recuperación: 2025-08-13 07:57:54
 Duración de la caída: 56415 segundos (15:40:15)
 ------------------------------------------------------------
+Fecha de inicio: 2025-08-15 12:00:25
+Fecha de recuperación: 2025-08-15 12:00:39
+Duración de la caída: 13 segundos (0:00:13)
+------------------------------------------------------------
+Fecha de inicio: 2025-08-18 14:10:19
+Fecha de recuperación: 2025-08-18 14:10:34
+Duración de la caída: 14 segundos (0:00:14)
+------------------------------------------------------------
+Fecha de inicio: 2025-08-18 16:39:02
+Fecha de recuperación: 2025-08-18 16:39:12
+Duración de la caída: 10 segundos (0:00:10)
+------------------------------------------------------------
+Fecha de inicio: 2025-08-19 11:26:33
+Fecha de recuperación: 2025-08-19 11:27:01
+Duración de la caída: 28 segundos (0:00:28)
+------------------------------------------------------------

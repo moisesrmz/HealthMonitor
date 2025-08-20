@@ -1,8 +1,8 @@
 <!DOCTYPE html>
-<html lang="es">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Histórico de Resultados - Análisis Manual</title>
+    <title>Historical Results - Manual Analysis</title>
     <link rel="stylesheet" href="/static/css/flatpickr.min.css">
     <link rel="stylesheet" href="/static/css/datatables.min.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -19,35 +19,68 @@
         .filters button#download-btn {background-color: #007BFF;}
         .filters button:hover {filter: brightness(1.05);transform: scale(1.01);}
         .filters button#download-btn:hover {background-color: #0056b3;}
-        .chart-section {max-width: 1100px;margin: 50px auto 0 auto;background: #fff;border-radius: 10px;padding: 30px 30px 20px 30px;box-shadow: 0 0 16px rgba(0,0,0,0.07);}
+        .chart-section {max-width: 1100px;margin: 20px auto 0 auto;background: #fff;border-radius: 10px;padding: 30px 30px 20px 30px;box-shadow: 0 0 16px rgba(0,0,0,0.07);}
         .chart-container {margin-bottom: 46px;}
         .chart-title {text-align: center;margin-bottom: 7px;font-weight: 500;color: #333;letter-spacing: 0.5px;}
         #no-data-msg {text-align: center;margin-top: 50px;color: #aa2323;font-size: 1.15em;font-weight: 500;display: none;}
         #failures-container {max-width: 900px;margin: 34px auto 0 auto;background: #f9f9ff;border-radius: 10px;box-shadow: 0 0 10px rgba(48, 24, 140, 0.04);padding: 20px 20px 6px 20px;display: none;}
         #failures-title {text-align: center;color: #5a189a;font-weight: 500;letter-spacing: 0.6px;font-size: 1.15em;margin-bottom: 10px;}
+        #filter-banner {
+            display:none;
+            text-align:center;
+            margin: 15px auto;
+            padding: 8px 14px;
+            max-width: 420px;
+            background:#fffae6;
+            border:1px solid #f0c36d;
+            border-radius:6px;
+            font-weight:500;
+            color:#8a6d3b;
+            font-size:0.95em;
+            box-shadow:0 2px 6px rgba(0,0,0,0.07);
+            position: relative;
+        }
+        #filter-banner button {
+            position: absolute;
+            right: 8px;
+            top: 6px;
+            border:none;
+            background:none;
+            font-weight:bold;
+            cursor:pointer;
+            color:#a67c00;
+        }
         .footer {text-align: center;color: #757575;font-size: 0.9em;margin-top: 60px;}
     </style>
 </head>
 <body>
-    <h1>Análisis Manual de Resultados FA</h1>
+    <h1>Manual Analysis of FA Results</h1>
     <div class="upload-area">
         <input type="file" id="csv-input" accept=".csv">
     </div>
     <div class="filters">
-        <input type="text" id="start-date" placeholder="Fecha inicio">
-        <input type="text" id="end-date" placeholder="Fecha fin">
-        <input type="text" id="part-filter" placeholder="PartNumber (opcional)">
-        <button id="analyze-btn">Analizar</button>
-        <button id="download-btn">Descargar CSV</button>
+        <input type="text" id="start-date" placeholder="Start date">
+        <input type="text" id="end-date" placeholder="End date">
+        <input type="text" id="part-filter" placeholder="PartNumber (optional)">
+        <button id="analyze-btn">Analyze</button>
+        <button id="download-btn">Download CSV</button>
     </div>
-    <div id="no-data-msg">Cargue un archivo .csv válido y presione "Analizar".</div>
+
+    <div id="no-data-msg">Load a valid .csv file and press "Analyze".</div>
+
+    <!-- Banner de filtro -->
+    <div id="filter-banner">
+        Filter applied: <span id="filter-label"></span>
+        <button id="close-filter">✖</button>
+    </div>
+
     <div class="chart-section" id="charts-area" style="display:none;">
         <div class="chart-container">
-            <div class="chart-title">Yield (%) por Día</div>
+            <div class="chart-title">Yield (%) by Date</div>
             <canvas id="yield-date-chart" height="78"></canvas>
         </div>
         <div class="chart-container">
-            <div class="chart-title">Yield (%) Promedio por PN</div>
+            <div class="chart-title">Average Yield (%) by PN</div>
             <canvas id="yield-part-chart" height="90"></canvas>
         </div>
     </div>
@@ -56,10 +89,11 @@
         <canvas id="failures-chart" height="130"></canvas>
     </div>
     <div class="footer">
-        &copy; Developed by HFM Test Department.<br><br>
+        &copy; Developed by NTW Test Department.<br><br>
         2025 FA Health Monitor.<br><br>
-        <a href="mailto:moises.ramirez1@molex.com" style="color: #00ccff; text-decoration: none;">Contacto</a>
+        <a href="mailto:moises.ramirez1@molex.com" style="color: #00ccff; text-decoration: none;">Contact</a>
     </div>
+
     <script src="/static/js/flatpickr.min.js"></script>
     <script>
     flatpickr("#start-date", { dateFormat: "Y-m-d" });
@@ -111,6 +145,7 @@
 
     let rawData = [], filteredData = [];
     let yieldDateChart = null, yieldPartChart = null, failuresChart = null;
+    let currentFilterDate = null;
 
     document.getElementById("csv-input").addEventListener("change", e => {
         const file = e.target.files[0];
@@ -128,7 +163,7 @@
                 if (failuresChart) failuresChart.destroy();
             } catch {
                 rawData = [];
-                document.getElementById("no-data-msg").textContent = "Archivo inválido o formato incorrecto.";
+                document.getElementById("no-data-msg").textContent = "Invalid file or wrong format.";
                 document.getElementById("no-data-msg").style.display = "block";
             }
         };
@@ -137,17 +172,21 @@
 
     document.getElementById("analyze-btn").addEventListener("click", () => {
         if (!rawData.length) {
-            document.getElementById("no-data-msg").textContent = "Cargue un archivo .csv válido y presione 'Analizar'.";
+            document.getElementById("no-data-msg").textContent = "Load a valid .csv file and press 'Analyze'.";
             document.getElementById("no-data-msg").style.display = "block";
             document.getElementById("charts-area").style.display = "none";
             document.getElementById("failures-container").style.display = "none";
             return;
         }
+        applyFiltersAndRender(rawData);
+    });
+
+    function applyFiltersAndRender(baseData){
         const start = document.getElementById("start-date").value;
         const end = document.getElementById("end-date").value;
         const part = document.getElementById("part-filter").value.trim();
 
-        filteredData = rawData.filter(row => {
+        filteredData = baseData.filter(row => {
             let dateOk = true, partOk = true;
             if (start) dateOk = (row["TestDate"] && row["TestDate"] >= start);
             if (end) dateOk = dateOk && (row["TestDate"] && row["TestDate"] <= end);
@@ -156,7 +195,7 @@
         });
 
         if (!filteredData.length) {
-            document.getElementById("no-data-msg").textContent = "No hay datos para los filtros aplicados.";
+            document.getElementById("no-data-msg").textContent = "No data for the applied filters.";
             document.getElementById("no-data-msg").style.display = "block";
             document.getElementById("charts-area").style.display = "none";
             document.getElementById("failures-container").style.display = "none";
@@ -166,6 +205,11 @@
         document.getElementById("charts-area").style.display = "block";
         document.getElementById("failures-container").style.display = "none";
 
+        renderDateChart();
+        renderPartChart(filteredData);
+    }
+
+    function renderDateChart(){
         const byDate = {};
         filteredData.forEach(row => {
             const d = row["TestDate"];
@@ -177,23 +221,19 @@
         const dateLabels = Object.keys(byDate).sort();
         const yieldByDate = dateLabels.map(d => (byDate[d].passed/byDate[d].total)*100);
 
-        // Forecast sencillo usando regresión lineal
+        // Forecast simple (linear regression)
+        const n = dateLabels.length;
         const xVals = dateLabels.map((_,i)=>i);
         const yVals = yieldByDate;
-        const n = xVals.length;
         const meanX = xVals.reduce((a,b)=>a+b,0)/n;
         const meanY = yVals.reduce((a,b)=>a+b,0)/n;
         let num=0, den=0;
         for(let i=0;i<n;i++){num+=(xVals[i]-meanX)*(yVals[i]-meanY);den+=(xVals[i]-meanX)**2;}
         const slope=num/den, intercept=meanY - slope*meanX;
         const forecastDays=7;
-        const forecastLabels=[], forecastY=[];
-        for(let i=1;i<=forecastDays;i++){
-            forecastLabels.push(`F+${i}`);
-            forecastY.push(Math.min(100, Math.max(0, intercept + slope*(n-1+i))));
-        }
+        const forecastLabels = Array.from({length: forecastDays}, (_, i) => `F+${i+1}`);
+        const forecastY = forecastLabels.map((_,i)=>Math.min(100, Math.max(0, intercept + slope*(n+i))));
 
-        // Escala dinámica pro
         let minY = Math.min(...yieldByDate, ...forecastY);
         let maxY = Math.max(...yieldByDate, ...forecastY);
         const margin = (maxY - minY) * 0.15;
@@ -202,14 +242,14 @@
         if (yMax > 97 && yMin > 90) { yMin = Math.max(85, minY - 2); yMax = 100; }
 
         if (yieldDateChart) yieldDateChart.destroy();
-        yieldDateChart = new Chart(document.getElementById('yield-date-chart'), {
+        const ctx = document.getElementById('yield-date-chart');
+        yieldDateChart = new Chart(ctx, {
             type: 'line',
             data: {
                 labels: [...dateLabels, ...forecastLabels],
                 datasets: [
                     {label:'Yield %',data:[...yieldByDate, ...Array(forecastDays).fill(null)],borderWidth:2,borderColor:'rgba(72,27,179,0.8)',backgroundColor:'rgba(72,27,179,0.1)',tension:0.13,pointRadius:4,pointBackgroundColor:'rgba(72,27,179,0.85)'},
-                    {label:'Forecast',data:[...Array(dateLabels.length-1).fill(null),yieldByDate[yieldByDate.length-1],...forecastY],borderWidth:2,borderColor:'rgba(0,102,153,0.85)',borderDash:[6,6],tension:0.13,pointRadius:4,pointBackgroundColor:'rgba(0,102,153,0.9)'}
-
+                    {label:'Forecast',data:[...Array(dateLabels.length-1).fill(null), yieldByDate[yieldByDate.length-1], ...forecastY],borderWidth:2,borderColor:'rgba(192,192,192,0.9)',borderDash:[6,6],tension:0.13,pointRadius:4,pointBackgroundColor:'rgba(192,192,192,1)'}
                 ]
             },
             options: {
@@ -242,13 +282,43 @@
                         }
                     }
                 },
-                scales: {x:{title:{display:true,text:"Fecha"}},y:{min:yMin, max:yMax, grace: '10%',title:{display:true,text:"Yield (%)"}}}
+                scales: {x:{title:{display:true,text:"Date"}},y:{min:yMin, max:yMax, grace: '10%',title:{display:true,text:"Yield (%)"}}}
             }
         });
 
-        // Yield por PartNumber
+        // click para aplicar filtro
+        ctx.onclick = evt => {
+            const points = yieldDateChart.getElementsAtEventForMode(evt, 'nearest', { intersect: true }, true);
+            if (!points.length) return;
+            const date = yieldDateChart.data.labels[points[0].index];
+            if (!dateLabels.includes(date)) return;
+            currentFilterDate = date;
+            renderPartChart(filteredData.filter(r=>r["TestDate"]===date));
+            document.getElementById("failures-container").style.display = "none";
+            document.getElementById("filter-banner").style.display = "block";
+            document.getElementById("filter-label").textContent = date;
+        };
+
+        // doble click reset
+        ctx.ondblclick = () => {
+            currentFilterDate = null;
+            renderPartChart(filteredData);
+            document.getElementById("failures-container").style.display="none";
+            document.getElementById("filter-banner").style.display="none";
+        };
+
+        // botón de cerrar banner
+        document.getElementById("close-filter").onclick = () => {
+            currentFilterDate = null;
+            renderPartChart(filteredData);
+            document.getElementById("failures-container").style.display="none";
+            document.getElementById("filter-banner").style.display="none";
+        };
+    }
+
+    function renderPartChart(data){
         const byPart = {};
-        filteredData.forEach(row => {
+        data.forEach(row => {
             const p = row["PartNumber"];
             if (!p) return;
             if (!byPart[p]) byPart[p] = { passed:0, total:0 };
@@ -263,21 +333,25 @@
         yieldPartChart = new Chart(document.getElementById('yield-part-chart'), {
             type: 'bar',
             data: {labels: partLabels, datasets:[{label:'Yield %',data:yieldByPart,borderWidth:2.1,borderRadius:11,borderSkipped:false,borderColor:'rgba(48,24,140,0.93)',backgroundColor:generarColores(partLabels.length, 0.19),maxBarThickness:46}]},
-            options: {responsive:true,plugins:{tooltip:{callbacks:{label: ctx => `${ctx.parsed.y.toFixed(1)} %`}}},scales:{x:{title:{display:true,text:"PartNumber"}},y:{min:0,max:100,title:{display:true,text:"Yield (%)"}}}}
+            options: {responsive:true,plugins:{tooltip:{callbacks:{label: (ctx) => {
+                const total = partData[ctx.dataIndex].total;
+                const passed = Math.round(total * (ctx.parsed.y/100));
+                return [`Yield: ${ctx.parsed.y.toFixed(1)} %`,`Pass: ${passed} / Total: ${total}`];
+            }}}},scales:{x:{title:{display:true,text:"PartNumber"}},y:{min:0,max:100,title:{display:true,text:"Yield (%)"}}}}
         });
 
         document.getElementById('yield-part-chart').onclick = evt => {
             const points = yieldPartChart.getElementsAtEventForMode(evt, 'nearest', { intersect: true }, true);
             if (!points.length) return;
-            mostrarGraficaFallas(partLabels[points[0].index]);
+            mostrarGraficaFallas(partLabels[points[0].index], data);
         };
-    });
+    }
 
-    function mostrarGraficaFallas(partNumber) {
-        const data = filteredData.filter(row => row["PartNumber"] === partNumber);
+    function mostrarGraficaFallas(partNumber, data) {
+        const rows = data.filter(row => row["PartNumber"] === partNumber);
         const failureCount = {};
         let okCount = 0;
-        data.forEach(row => {
+        rows.forEach(row => {
             const fail = (row["Failure"] || "").trim();
             if (!fail || fail.toUpperCase() === "N/A" || fail.toUpperCase() === "PASS") okCount++;
             else failureCount[fail] = (failureCount[fail] || 0) + 1;
@@ -286,14 +360,13 @@
         const sortedLabels = pairs.map(p=>p.l);
         const sortedValues = pairs.map(p=>p.v);
 
-        document.getElementById('failures-title').textContent = `Desglose de fallas para el PN "${partNumber}". OK: ${okCount}`;
+        document.getElementById('failures-title').textContent = `Failure breakdown for PN "${partNumber}". OK: ${okCount}`;
 
         if (failuresChart) failuresChart.destroy();
         failuresChart = new Chart(document.getElementById('failures-chart'), {
             type: 'bar',
-            data: {labels: sortedLabels, datasets:[{label:'Cantidad',data:sortedValues,borderWidth:2.1,borderRadius:11,borderSkipped:false,borderColor:'rgba(72,27,179,0.80)',backgroundColor:generarColores(sortedLabels.length, 0.22),maxBarThickness:54}]},
-            options: {responsive:true,plugins:{legend:{display:false},datalabels:{color:'#222',anchor:'end',align:'top',font:{weight:'bold',size:13},formatter:value=>value}},scales:{x:{title:{display:true,text:"Falla"}},y:{beginAtZero:true,title:{display:true,text:"Cantidad"},suggestedMax: Math.max(...sortedValues)*1.05}}},
-            plugins:[ChartDataLabels]
+            data: {labels: sortedLabels, datasets:[{label:'Quantity',data:sortedValues,borderWidth:2.1,borderRadius:11,borderSkipped:false,borderColor:'rgba(72,27,179,0.80)',backgroundColor:generarColores(sortedLabels.length, 0.22),maxBarThickness:54}]},
+            options: {responsive:true,plugins:{legend:{display:false},datalabels:{color:'#222',anchor:'end',align:'top',font:{weight:'bold',size:13},formatter:value=>value}},scales:{x:{title:{display:true,text:"Failure"}},y:{beginAtZero:true,title:{display:true,text:"Quantity"},suggestedMax: Math.max(...sortedValues)*1.05}}},plugins:[ChartDataLabels]
         });
         document.getElementById("failures-container").style.display = "block";
     }
