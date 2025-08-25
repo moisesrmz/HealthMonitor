@@ -30,16 +30,15 @@
             text-align:center;
             margin: 15px auto;
             padding: 8px 14px;
-            max-width: 420px;
-            background:#fffae6;
-            border:1px solid #f0c36d;
+            max-width: 600px;
             border-radius:6px;
             font-weight:500;
-            color:#8a6d3b;
             font-size:0.95em;
             box-shadow:0 2px 6px rgba(0,0,0,0.07);
             position: relative;
         }
+        #filter-banner.success {background:#e6ffed; border:1px solid #34a853; color:#0c6b2f;}
+        #filter-banner.danger {background:#ffe6e6; border:1px solid #d93025; color:#a3261c;}
         #filter-banner button {
             position: absolute;
             right: 8px;
@@ -48,8 +47,8 @@
             background:none;
             font-weight:bold;
             cursor:pointer;
-            color:#a67c00;
         }
+        #filter-icon {margin-right:6px;}
         .footer {text-align: center;color: #757575;font-size: 0.9em;margin-top: 60px;}
     </style>
 </head>
@@ -68,9 +67,9 @@
 
     <div id="no-data-msg">Load a valid .csv file and press "Analyze".</div>
 
-    <!-- Banner de filtro -->
+    <!-- Filter banner -->
     <div id="filter-banner">
-        Filter applied: <span id="filter-label"></span>
+        <span id="filter-icon"></span><span id="filter-label"></span>
         <button id="close-filter">✖</button>
     </div>
 
@@ -116,6 +115,7 @@
         return colores;
     }
 
+    // CSV parser
     function parseCSV(content) {
         const lines = content.split(/\r?\n/).filter(line => line.trim().length);
         const headers = parseCSVRow(lines[0]);
@@ -170,6 +170,7 @@
         reader.readAsText(file);
     });
 
+    // Analyze button
     document.getElementById("analyze-btn").addEventListener("click", () => {
         if (!rawData.length) {
             document.getElementById("no-data-msg").textContent = "Load a valid .csv file and press 'Analyze'.";
@@ -178,15 +179,11 @@
             document.getElementById("failures-container").style.display = "none";
             return;
         }
-        applyFiltersAndRender(rawData);
-    });
-
-    function applyFiltersAndRender(baseData){
         const start = document.getElementById("start-date").value;
         const end = document.getElementById("end-date").value;
         const part = document.getElementById("part-filter").value.trim();
 
-        filteredData = baseData.filter(row => {
+        filteredData = rawData.filter(row => {
             let dateOk = true, partOk = true;
             if (start) dateOk = (row["TestDate"] && row["TestDate"] >= start);
             if (end) dateOk = dateOk && (row["TestDate"] && row["TestDate"] <= end);
@@ -204,14 +201,13 @@
         document.getElementById("no-data-msg").style.display = "none";
         document.getElementById("charts-area").style.display = "block";
         document.getElementById("failures-container").style.display = "none";
+        renderDateChart(filteredData);
+    });
 
-        renderDateChart();
-        renderPartChart(filteredData);
-    }
-
-    function renderDateChart(){
+    // Render Yield by Date + Forecast
+    function renderDateChart(data) {
         const byDate = {};
-        filteredData.forEach(row => {
+        data.forEach(row => {
             const d = row["TestDate"];
             if (!d) return;
             if (!byDate[d]) byDate[d] = { passed:0, total:0 };
@@ -221,7 +217,7 @@
         const dateLabels = Object.keys(byDate).sort();
         const yieldByDate = dateLabels.map(d => (byDate[d].passed/byDate[d].total)*100);
 
-        // Forecast simple (linear regression)
+        // Forecast regression
         const n = dateLabels.length;
         const xVals = dateLabels.map((_,i)=>i);
         const yVals = yieldByDate;
@@ -242,8 +238,7 @@
         if (yMax > 97 && yMin > 90) { yMin = Math.max(85, minY - 2); yMax = 100; }
 
         if (yieldDateChart) yieldDateChart.destroy();
-        const ctx = document.getElementById('yield-date-chart');
-        yieldDateChart = new Chart(ctx, {
+        yieldDateChart = new Chart(document.getElementById('yield-date-chart'), {
             type: 'line',
             data: {
                 labels: [...dateLabels, ...forecastLabels],
@@ -286,37 +281,46 @@
             }
         });
 
-        // click para aplicar filtro
-        ctx.onclick = evt => {
+        // click filter
+        yieldDateChart.canvas.onclick = evt => {
             const points = yieldDateChart.getElementsAtEventForMode(evt, 'nearest', { intersect: true }, true);
             if (!points.length) return;
             const date = yieldDateChart.data.labels[points[0].index];
             if (!dateLabels.includes(date)) return;
             currentFilterDate = date;
-            renderPartChart(filteredData.filter(r=>r["TestDate"]===date));
+            const filtered = filteredData.filter(r=>r["TestDate"]===date);
+
+            const pass = filtered.filter(r => (r["TestResult"]||"").toUpperCase()==="PASS").length;
+            const avgYield = (pass/filtered.length)*100;
+
+            renderPartChart(filtered);
             document.getElementById("failures-container").style.display = "none";
-            document.getElementById("filter-banner").style.display = "block";
-            document.getElementById("filter-label").textContent = date;
+
+            const banner = document.getElementById("filter-banner");
+            banner.style.display = "block";
+            banner.classList.remove("success","danger");
+            if (avgYield >= 96) {
+                banner.classList.add("success");
+                document.getElementById("filter-icon").textContent = "✅";
+            } else {
+                banner.classList.add("danger");
+                document.getElementById("filter-icon").textContent = "⚠️";
+            }
+            document.getElementById("filter-label").textContent = `Filter: ${date} (${filtered.length} rows, Avg Yield: ${avgYield.toFixed(1)}%)`;
         };
 
-        // doble click reset
-        ctx.ondblclick = () => {
+        // double click clear filter
+        yieldDateChart.canvas.ondblclick = () => {
             currentFilterDate = null;
             renderPartChart(filteredData);
-            document.getElementById("failures-container").style.display="none";
-            document.getElementById("filter-banner").style.display="none";
+            document.getElementById("filter-banner").style.display = "none";
         };
 
-        // botón de cerrar banner
-        document.getElementById("close-filter").onclick = () => {
-            currentFilterDate = null;
-            renderPartChart(filteredData);
-            document.getElementById("failures-container").style.display="none";
-            document.getElementById("filter-banner").style.display="none";
-        };
+        renderPartChart(filteredData);
     }
 
-    function renderPartChart(data){
+    // Yield by PartNumber
+    function renderPartChart(data) {
         const byPart = {};
         data.forEach(row => {
             const p = row["PartNumber"];
@@ -333,10 +337,10 @@
         yieldPartChart = new Chart(document.getElementById('yield-part-chart'), {
             type: 'bar',
             data: {labels: partLabels, datasets:[{label:'Yield %',data:yieldByPart,borderWidth:2.1,borderRadius:11,borderSkipped:false,borderColor:'rgba(48,24,140,0.93)',backgroundColor:generarColores(partLabels.length, 0.19),maxBarThickness:46}]},
-            options: {responsive:true,plugins:{tooltip:{callbacks:{label: (ctx) => {
-                const total = partData[ctx.dataIndex].total;
-                const passed = Math.round(total * (ctx.parsed.y/100));
-                return [`Yield: ${ctx.parsed.y.toFixed(1)} %`,`Pass: ${passed} / Total: ${total}`];
+            options: {responsive:true,plugins:{tooltip:{callbacks:{label: ctx => {
+                const p = partData[ctx.dataIndex];
+                const passed = Math.round(p.total * p.yield / 100);
+                return [`Yield: ${ctx.parsed.y.toFixed(1)} %`, `Pass: ${passed} / Total: ${p.total}`];
             }}}},scales:{x:{title:{display:true,text:"PartNumber"}},y:{min:0,max:100,title:{display:true,text:"Yield (%)"}}}}
         });
 
@@ -347,11 +351,12 @@
         };
     }
 
-    function mostrarGraficaFallas(partNumber, data) {
-        const rows = data.filter(row => row["PartNumber"] === partNumber);
+    // Failures chart
+    function mostrarGraficaFallas(partNumber, dataSet) {
+        const data = dataSet.filter(row => row["PartNumber"] === partNumber);
         const failureCount = {};
         let okCount = 0;
-        rows.forEach(row => {
+        data.forEach(row => {
             const fail = (row["Failure"] || "").trim();
             if (!fail || fail.toUpperCase() === "N/A" || fail.toUpperCase() === "PASS") okCount++;
             else failureCount[fail] = (failureCount[fail] || 0) + 1;
@@ -366,13 +371,21 @@
         failuresChart = new Chart(document.getElementById('failures-chart'), {
             type: 'bar',
             data: {labels: sortedLabels, datasets:[{label:'Quantity',data:sortedValues,borderWidth:2.1,borderRadius:11,borderSkipped:false,borderColor:'rgba(72,27,179,0.80)',backgroundColor:generarColores(sortedLabels.length, 0.22),maxBarThickness:54}]},
-            options: {responsive:true,plugins:{legend:{display:false},datalabels:{color:'#222',anchor:'end',align:'top',font:{weight:'bold',size:13},formatter:value=>value}},scales:{x:{title:{display:true,text:"Failure"}},y:{beginAtZero:true,title:{display:true,text:"Quantity"},suggestedMax: Math.max(...sortedValues)*1.05}}},plugins:[ChartDataLabels]
+            options: {responsive:true,plugins:{legend:{display:false},datalabels:{color:'#222',anchor:'end',align:'top',font:{weight:'bold',size:13},formatter:value=>value}},scales:{x:{title:{display:true,text:"Failure"}},y:{beginAtZero:true,title:{display:true,text:"Quantity"},suggestedMax: Math.max(...sortedValues)*1.05}}},
+            plugins:[ChartDataLabels]
         });
         document.getElementById("failures-container").style.display = "block";
     }
 
     document.getElementById("download-btn").addEventListener("click", () => {
         window.open("/download_csv", "_blank");
+    });
+
+    // Close filter
+    document.getElementById("close-filter").addEventListener("click", () => {
+        currentFilterDate = null;
+        renderPartChart(filteredData);
+        document.getElementById("filter-banner").style.display = "none";
     });
     </script>
 </body>
