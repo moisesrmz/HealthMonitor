@@ -84,9 +84,6 @@
             {% endfor %}
         </div>
     </div>
-    <div id="scorecard-container" style="display: none; text-align: center; padding: 20px;">
-        <img id="scorecard-img" src="/static/images/scorecard.png?ts={{ timestamp }}" style="max-width: 95%; border-radius: 12px; box-shadow: 0 0 25px rgba(0,0,0,0.2);" alt="Scorecard">
-    </div>
     <div class="footer" style="text-align: center; margin-top: -5px; color: #757575; font-size: 0.9em;">
         &copy; Developed by HFM Test Department.
         <br><br>
@@ -372,22 +369,6 @@
             opacity: 1;
             transform: translateX(-50%) translateY(0);
         }
-        #scorecard-container table {
-            font-size: 0.9em;
-            background-color: #fff;
-            box-shadow: 0 0 15px rgba(0,0,0,0.1);
-        }
-
-        #scorecard-container th {
-            background-color: #4cd964;
-            color: #fff;
-            text-align: left;
-        }
-
-        #scorecard-container td, #scorecard-container th {
-            padding: 8px;
-        }
-
     </style>
 
     <script>
@@ -607,37 +588,10 @@
                 window.scrollTo({ left: document.body.scrollWidth, behavior: "instant" });
             }, 300);  // Puedes ajustar el delay si aún no scrolla
         };
-        let showDashboard = true;
-
-        // Alternar entre dashboard y scorecard cada 30 segundos
-        setInterval(() => {
-            showDashboard = !showDashboard;
-
-            document.querySelector(".grid-container").style.display = showDashboard ? "flex" : "none";
-            document.querySelector("#scorecard-container").style.display = showDashboard ? "none" : "block";
-
-            if (!showDashboard) {
-                refreshScorecardImage();
-            } else {
-                // ⏳ Esperar a que se muestre y aplicar scroll
-                setTimeout(() => {
-                    window.scrollTo({ left: document.body.scrollWidth, behavior: "instant" });
-                }, 200); // ajusta si es necesario
-            }
-        }, 30000);
-
-        
-        function refreshScorecardImage() {
-        const img = document.getElementById("scorecard-img");
-        const timestamp = new Date().getTime();
-        img.src = `/static/images/scorecard.png?ts=${timestamp}`;
-    }
-
     document.getElementById("registros-btn").addEventListener("click", () => {
         window.open("/historico", "_blank");
     });
     </script>
-<!-- Contenedor oculto para el Scorecard -->
 
 </body>
 </html>
