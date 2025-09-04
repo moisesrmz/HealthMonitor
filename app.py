@@ -29,10 +29,8 @@ socketio = SocketIO(app)
 last_reset_time = datetime.datetime.now()
 current_mode = "OEE"
 poee_start_times = defaultdict(lambda: None)
-#poee_inactivity_snapshot = defaultdict(lambda: 0)
 inactivity_accumulated_oee = defaultdict(float)
 inactivity_accumulated_poee = defaultdict(float)
-# Contadores internos de passed válidos (post-descuento)
 activation_pass_counter = defaultdict(int)
 activation_status = defaultdict(lambda: {
     "active": False,
@@ -59,7 +57,7 @@ folder_labels = {
 counts_lock = threading.Lock()
 cycle_times = defaultdict(list)
 last_file_times = defaultdict(lambda: None)
-is_resetting = False  # 🔒 Flag para bloquear entrada durante reseteo
+is_resetting = False 
 
 
 class NewFileHandler(FileSystemEventHandler):
@@ -70,7 +68,6 @@ class NewFileHandler(FileSystemEventHandler):
             print(f"[WAIT] Ignorando archivo durante reset: {event.src_path}")
             return
         file_path = event.src_path
-        #parent_folder = os.path.basename(os.path.dirname(file_path))
         parent_folder = get_line_folder(file_path)
         print(f"[INFO] Nuevo archivo detectado: {file_path}")
 
@@ -101,7 +98,6 @@ class NewFileHandler(FileSystemEventHandler):
                                 status = "Pass"
                             elif any(fail in line for fail in ["Failed", "*FAIL", "Falla"]):
                                 status = "Fail"
-
                         if "Reference:" in line:
                             reference = re.sub(r'^[*,\s]+', '', line.split("Reference:")[-1].strip())
                         elif "Nombre de la prueba:" in line:
@@ -187,9 +183,7 @@ class NewFileHandler(FileSystemEventHandler):
 
                     if current_part and prev_part != current_part:
                         reset_line_state(parent_folder, current_part)
-
                     real_passed = 0
-
                     if not activation_status[parent_folder]["active"]:
                         if status == "Pass":
                             if activation_status[parent_folder]["discount_pass"] > 0:
@@ -207,7 +201,6 @@ class NewFileHandler(FileSystemEventHandler):
                                 failed = 0
                             else:
                                 failed = 1
-
                         if activation_pass_counter[parent_folder] == 4:
                             pass_fail_counts[parent_folder]["Passed"] += 4
                             real_passed = 0
@@ -215,26 +208,19 @@ class NewFileHandler(FileSystemEventHandler):
 
                             if not poee_start_times.get(parent_folder):
                                 poee_start_times[parent_folder] = timestamp - datetime.timedelta(seconds=60)
-
                             print(f"[🟢 ACTIVADA] Línea {parent_folder} ACTIVADA tras 6 Passed (2 skip + 4 válidos)")
-
-
                         if not activation_status[parent_folder]["active"]:
                             print(f"[⛔ NO ACTIVA] {parent_folder}, esperando más Passed/Fail")
                             return
-
                     else:
                         if status == "Pass":
                             real_passed = 1
                         elif status == "Fail":
                             failed = 1
-
-
                     oee_data = calculate_oee(parent_folder)
                     adjusted_elapsed_time = oee_data["adjusted_elapsed_time"]
                     if parent_folder not in inactivity_accumulated_oee:
                         inactivity_accumulated_oee[parent_folder] = adjusted_elapsed_time
-
                     data_to_insert = {
                         "SerialNumber": serial_number,
                         "PartNumber": current_part,
@@ -262,7 +248,6 @@ class NewFileHandler(FileSystemEventHandler):
                         pass_fail_counts[parent_folder]["Reference"] = reference or "N/A"
                         pass_fail_counts[parent_folder]["Test Name"] = test_name or "N/A"
                         pass_fail_counts[parent_folder]["Nombre de la prueba"] = nombre_prueba or "N/A"
-
                     emit_data()
                     return
                 except PermissionError:
@@ -272,10 +257,6 @@ class NewFileHandler(FileSystemEventHandler):
                     return
             else:
                 time.sleep(0.5)
-
-
-
-# Diccionario para almacenar tiempos de inactividad acumulados por línea
 inactivity_start_time = {}
 flag_state = defaultdict(lambda: False)
 # NUEVAS VARIABLES GLOBALES
@@ -285,7 +266,6 @@ inactivity_state = defaultdict(lambda: False)  # True = inactivo
 
 def get_line_folder(file_path):
     parts = os.path.normpath(file_path).split(os.sep)
-    # Busca la cadena 'LogFiles' en minúsculas para evitar case sensitive
     parts_lower = [p.lower() for p in parts]
     try:
         idx = parts_lower.index("logfiles")
@@ -310,14 +290,11 @@ def emit_data():
             label = "F1"
         else:
             label = folder_labels.get(parent_folder, parent_folder)
-
         total_tests = counts["Passed"] + counts["Failed"]
         yield_value = (counts["Passed"] / total_tests) * 100 if total_tests > 0 else 0
         avg_cycle_time = get_average_cycle_time(parent_folder)
         last_time = last_file_times[parent_folder]
         current_state = 1
-
-        # 🧠 Determinar si la línea está inactiva
         if avg_cycle_time is None or last_time is None:
             avg_cycle_time = 0
             if not flag_state[parent_folder]:
@@ -328,10 +305,7 @@ def emit_data():
         else:
             if (now - last_time).total_seconds() > (avg_cycle_time + avg_cycle_time * 0.3):
                 current_state = 0
-
-        # 💡 Siempre evaluamos OEE
         if current_state == 0:
-            # OEE: Acumular inactividad siempre
             if not inactivity_state[parent_folder]:
                 inactivity_start_time_oee[parent_folder] = now
                 print(f"[⏱️ OEE] INICIO inactividad en {parent_folder} a {now.strftime('%H:%M:%S')}")
@@ -340,8 +314,6 @@ def emit_data():
                 inactivity_accumulated_oee[parent_folder] += elapsed_oee
                 inactivity_start_time_oee[parent_folder] = now
                 print(f"[➕ OEE] +{elapsed_oee:.2f}s acumulados en {parent_folder}")
-
-            # POEE: Solo si ya hubo producción (tiene poee_start_time)
             if poee_start_times.get(parent_folder):
                 if not inactivity_state[parent_folder]:
                     inactivity_start_time_poee[parent_folder] = now
@@ -351,18 +323,12 @@ def emit_data():
                     inactivity_accumulated_poee[parent_folder] += elapsed_poee
                     inactivity_start_time_poee[parent_folder] = now
                     print(f"[➕ POEE] +{elapsed_poee:.2f}s acumulados en {parent_folder}")
-
-            # Marcar como inactivo (una vez)
             inactivity_state[parent_folder] = True
         else:
-            # Línea activa: reset de tiempos
             inactivity_state[parent_folder] = False
             inactivity_start_time_oee.pop(parent_folder, None)
             inactivity_start_time_poee.pop(parent_folder, None)
-
-        # Calcular métricas OEE
         oee_data = calculate_oee(parent_folder)
-
         data.append({
             "label": label,
             "yield": yield_value,
@@ -398,7 +364,6 @@ def calculate_oee(line):
                 start_time = now
                 poee_start_times[line] = now
             else:
-                # Línea no activa, no debería contar tiempo aún
                 print(f"[INFO] Línea {line} aún no activada. No se cuenta tiempo.")
                 return {
                     "line": line,
@@ -428,6 +393,7 @@ def calculate_oee(line):
 
     # Definir tiempos de ciclo ideales por número de parte convertido a segundos
     ideal_cycle_times = {
+        "2088702207": 3600/75,  # 75/hr
         "2098700356": 3600/165,  # 165/hr
         "2098700316": 3600/150,  # 150/hr
         "2098700154": 3600/165,  # 165/hr
@@ -437,21 +403,15 @@ def calculate_oee(line):
         "2154150582": 3600/165,  # 165/hr    cambio a 165 desde 150
         "2154170049": 3600/72    # 72/hr
     }
-
-
     if line not in pass_fail_counts:
         print(f"[ERROR] Línea {line} no encontrada en pass_fail_counts. Usando N/A")
         part_number = "N/A"
     else:
-        # ✅ Obtener el número de parte correctamente
         part_number = pass_fail_counts[line].get("Reference", None)
         if not part_number or part_number == "N/A":
             part_number = pass_fail_counts[line].get("Test Name", None)
         if not part_number or part_number == "N/A":
             part_number = pass_fail_counts[line].get("Nombre de la prueba", "N/A")
-
-
-
     # Asignar tiempo de ciclo ideal basado en el número de parte (10 seg por defecto)
     if line[0].isdigit():
         ideal_cycle_time = 3600 / 264  # Si la línea comienza con un número, usar 3600/264
@@ -462,51 +422,30 @@ def calculate_oee(line):
     else:
         ideal_cycle_time = 3600 / 340  # Valor por defecto si no se cumplen las otras reglas
         #print(f"[VALIDACIÓN] Número de parte no encontrado en la lista. Usando valor por defecto: {ideal_cycle_time:.2f} segundos")
-
-
-
-    # Definir duraciones de turno en segundos
     shift_durations = {
         "T1": 8 * 3600,  # 8 horas en segundos
         "T2": 7.5 * 3600,  # 7.5 horas en segundos
         "T3": 8.5 * 3600   # 8.5 horas en segundos
     }
-
     current_time = now.strftime("%H:%M:%S")
     current_shift = determine_shift(current_time)
     current_shift_duration = shift_durations[current_shift]
-
-    # Calcular tiempo proporcional de descanso
     break_time = 2700  # 45 minutos (30 min comedor + 10 min de break + 5 min ejercicios)
     proportional_break_time = (elapsed_time / current_shift_duration) * break_time
-
-    # Calcular tiempo ajustado restando descansos
     adjusted_elapsed_time = elapsed_time
-
     line_label = folder_labels.get(line, line)
-
-    # Obtener tiempo de inactividad acumulado
     if current_mode == "POEE":
         inactive_time = inactivity_accumulated_poee.get(line, 0)
     else:
         inactive_time = inactivity_accumulated_oee.get(line, 0)
-
-    # Ajustar el tiempo de inactividad restando los descansos proporcionales
     adjusted_inactive_time = max(0, inactive_time - proportional_break_time)
-    # Calcular tiempo operativo
     operational_time = max(0, adjusted_elapsed_time - adjusted_inactive_time)
-
-    # Obtener datos de piezas
     good_pieces = pass_fail_counts[line].get("Passed", 0)
     total_pieces = good_pieces + pass_fail_counts[line].get("Failed", 0)
-
-    # Calculo de KPI's
     availability = (adjusted_elapsed_time - adjusted_inactive_time) / adjusted_elapsed_time if adjusted_elapsed_time > 0 else 0
     performance = (good_pieces * ideal_cycle_time) / operational_time if good_pieces > 0 and operational_time > 0 else 0
     quality = good_pieces / total_pieces if total_pieces > 0 else 0
     oee = availability * performance * quality
-
-    # Depuración de los KPI calculados
     print(f"[INFO] Línea: {line} (Label: {line_label})")
     print(f"[INFO] Número de parte detectado: {part_number}")
     #print(f"[INFO] Tiempo de ciclo ideal aplicado: {ideal_cycle_time} segundos")
@@ -561,7 +500,7 @@ def calculate_cycle_time(line, timestamp):
     last_time = last_file_times[line]
     if last_time is not None:
         cycle_time = (timestamp - last_time).total_seconds()
-        if cycle_time >= 0.05:  # Cambiado a 5 segundos
+        if cycle_time >= 0.05:  # Cambiado a 0.05 segundos
             cycle_times[line].append(cycle_time)
             print(f"[INFO] Tiempo de ciclo calculado para la línea {line}: {cycle_time:.2f}s")
             if len(cycle_times[line]) > 50:  #aqui se ajusta la cantidad de tiempos a promediar
@@ -576,29 +515,21 @@ def get_average_cycle_time(line, upper_percentile=96):
     times = cycle_times[line]
     if times:
         if len(times) == 1:
-            return times[0]  # Devuelve el primer tiempo registrado en lugar de N/A
-
-        # Calcular percentil superior (por defecto el 95%)
+            return times[0]
         upper_bound = np.percentile(times, upper_percentile)
-
-        # Filtrar valores que están por debajo del percentil superior
         filtered_times = [t for t in times if t <= upper_bound]
 
         if len(filtered_times) > 0:
-            return sum(filtered_times) / len(filtered_times)  # Calcular promedio sin valores altos
+            return sum(filtered_times) / len(filtered_times)
         else:
-            return None  # Si todos fueron filtrados como outliers
+            return None 
 
-    return None  # Si no hay registros, devuelve None
-
+    return None
 
 def periodic_update(interval=30):
-    """
-    Función para emitir datos cada 'interval' segundos.
-    """
     while True:
         with counts_lock:
-            emit_data()  # Llama a la función que emite los datos
+            emit_data() 
         time.sleep(interval)
 
 
@@ -705,8 +636,6 @@ def reset_all_values():
         inactivity_start_time_poee.clear()
         inactivity_state.clear()
         last_reset_time = datetime.datetime.now()
-
-        # 🔁 Reiniciar todas las líneas con descuentos correctos
         for line in folder_labels:
             current_part = "DEFAULT"
             activation_status[line] = {
@@ -809,8 +738,6 @@ def schedule_resets():
             if now < today_reset:
                 next_reset = today_reset
                 break
-
-        # Si no hay reinicio pendiente hoy, programarlo para el primer horario del día siguiente
         if next_reset is None:
             next_reset = datetime.datetime.combine(now.date() + datetime.timedelta(days=1), reset_times[0])
 
@@ -824,109 +751,6 @@ def schedule_resets():
         capture_screenshot()  # Capturar la pantalla antes del reinicio
         reset_all_values()
 
-
-SHAREPOINT_USER = ""
-SHAREPOINT_PASS = ""
-
-
-
-
-def login_to_sharepoint(driver, wait):
-    try:
-        # Paso 1: Usuario
-        email_input = wait.until(EC.presence_of_element_located((By.NAME, "loginfmt")))
-        email_input.send_keys(SHAREPOINT_USER)
-        driver.find_element(By.ID, "idSIButton9").click()
-        print("[✅] Usuario ingresado")
-
-        # Paso 2: Contraseña
-        password_input = wait.until(EC.presence_of_element_located((By.NAME, "passwd")))
-        password_input.send_keys(SHAREPOINT_PASS)
-        driver.find_element(By.ID, "idSIButton9").click()
-        print("[✅] Contraseña ingresada")
-
-        # Paso 3: Mantener sesión
-        try:
-            stay_signed_in = wait.until(EC.presence_of_element_located((By.ID, "idSIButton9")))
-            stay_signed_in.click()
-            print("[🔐] Mantener sesión activado")
-        except:
-            print("[ℹ️] Botón de mantener sesión no apareció (puede estar cacheado)")
-
-    except Exception as e:
-        print(f"[❌] Error durante el login: {e}")
-
-def capture_scorecard():
-    try:
-        chrome_options = Options()
-
-        # ✅ Mostrar navegador para login manual
-        chrome_options.add_argument("--start-maximized")
-        chrome_options.add_argument("--headless")  # ← Actívalo luego del primer login
-
-        # ✅ Usar perfil persistente para mantener sesión iniciada
-        profile_path = os.path.abspath("chrome_profile")
-        chrome_options.add_argument(f"--user-data-dir={profile_path}")
-
-        driver = webdriver.Chrome(options=chrome_options)
-        wait = WebDriverWait(driver, 15)
-
-        sharepoint_url = (
-            "https://kochind-my.sharepoint.com/:x:/r/personal/jose_cervantes_molex_com/"
-            "Documents/Dashboard%20HFM/ScoreCard%20Template%20(1).xlsx"
-            "?d=wcead5b5fd9684a6cb7510b71d445c3d7&csf=1&web=1&e=thwvE9&nav=MTVfezlCMUMxODU4LTBGRTYtNDk3My1CMzNDLUQ0MUQxMjQxQzE4RX0"
-        )
-
-        print("[🔗] Abriendo SharePoint...")
-        driver.get(sharepoint_url)
-
-        # Espera tiempo para login manual la primera vez
-        print("[⏳] Tienes 60 segundos para loguearte si es necesario...")
-        time.sleep(5)
-
-        # ✅ Ocultar el ribbon y headers de la UI
-        print("[🧼] Ocultando ribbon, headers y pie de página...")
-        driver.execute_script("""
-            let ribbon = document.querySelector('[role="toolbar"]');
-            if (ribbon) ribbon.style.display = "none";
-
-            let header = document.querySelector('[data-automationid="OfficeHeader"]');
-            if (header) header.style.display = "none";
-
-            let footer = document.querySelector('[data-automationid="Footer"]');
-            if (footer) footer.style.display = "none";
-        """)
-
-        # ✅ Zoom y scroll para vista clara
-        driver.execute_script("document.body.style.zoom='130%'")
-        driver.execute_script("window.scrollTo(0, 0);")
-
-        # ✅ Captura y guardado
-        # ✅ Captura y guardado
-        os.makedirs("static/images", exist_ok=True)
-        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-        screenshot_path = f"static/images/scorecard_{timestamp}.png"
-        driver.save_screenshot(screenshot_path)
-
-        # ✅ Sobrescribe scorecard.png
-        shutil.copyfile(screenshot_path, "static/images/scorecard.png")
-        # 🔥 Borrar capturas anteriores (excepto la recién creada)
-        for fname in os.listdir("static/images"):
-            if fname.startswith("scorecard_") and fname.endswith(".png") and fname != os.path.basename(screenshot_path):
-                try:
-                    os.remove(os.path.join("static/images", fname))
-                    print(f"[🗑️] Eliminada: {fname}")
-                except Exception as e:
-                    print(f"[⚠️] No se pudo eliminar {fname}: {e}")
-
-
-        driver.quit()
-        print(f"[📸] Captura de Scorecard guardada en: {screenshot_path}")
-
-
-        print(f"[📸] Captura de Scorecard guardada en: {screenshot_path}")
-    except Exception as e:
-        print(f"[❌ ERROR] Falló la captura automática: {e}")
 
 def load_fail_discounts():
     global part_fail_discounts
@@ -1003,15 +827,12 @@ def fetch_historico_data_route():
         end_date = data.get("end_date")
         part_number = data.get("part_number")
 
-        # Llama a la nueva función que acepta part_number como argumento
         results = fetch_historico_data(start_date, end_date, part_number)
 
         return jsonify(results or [])
     except Exception as e:
         print(f"[ERROR] fetch_historico_data_route: {e}")
         return jsonify([])
-
-
 
 @app.route("/download_csv")
 def download_csv():
@@ -1043,31 +864,12 @@ def download_csv():
         return "Error generando CSV", 500
 #####################################################################new ends
 
-
-# Enlace público al Excel
-SHAREPOINT_EXCEL_URL = "https://kochind-my.sharepoint.com/:x:/g/personal/jose_cervantes_molex_com/EV9brc5o2WxKt1ELcdRFw9cB9-Fe12M_LuK4d7tF7DScjA?email=functional.test%40molex.com&e=xOjsMh"
-
-
-
 if __name__ == '__main__':
-    #path_to_monitor = r"\\mlxgumvwfile01\Departamentos\Fakra\Pruebas\LogFiles"
     load_fail_discounts()
     monitor_thread = threading.Thread(target=start_monitoring, daemon=True)
     monitor_thread.start()
-
     periodic_thread = threading.Thread(target=periodic_update, daemon=True)##hilo de actualizacion
     periodic_thread.start()
-
     reset_thread = threading.Thread(target=schedule_resets, daemon=True)##hilo de reseteo programado
     reset_thread.start()
-
-    def schedule_scorecard_updates(interval=600):
-        while True:
-            capture_scorecard()
-            time.sleep(interval)
-
-    scorecard_thread = threading.Thread(target=schedule_scorecard_updates, daemon=True)
-    scorecard_thread.start()
-
-
     socketio.run(app, host="0.0.0.0", port=5000, use_reloader=False)

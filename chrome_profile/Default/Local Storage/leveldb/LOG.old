@@ -1,8 +1,0 @@
-2025/07/08-08:55:17.296 408 Reusing MANIFEST \\mlxgumvwfile01\Departamentos\Fakra\Pruebas\Proyectos\HealthMonitor\chrome_profile\Default\Local Storage\leveldb/MANIFEST-019304
-2025/07/08-08:55:17.498 408 Recovering log #30950
-2025/07/08-08:55:17.514 408 Level-0 table #30953: started
-2025/07/08-08:55:17.614 408 Level-0 table #30953: 124173 bytes OK
-2025/07/08-08:55:17.702 408 Recovering log #30953
-2025/07/08-08:55:17.842 408 Reusing old log \\mlxgumvwfile01\Departamentos\Fakra\Pruebas\Proyectos\HealthMonitor\chrome_profile\Default\Local Storage\leveldb/030953.log 
-2025/07/08-08:55:17.856 408 Delete type=0 #30950
-2025/07/08-08:55:17.857 408 Delete type=2 #30954
