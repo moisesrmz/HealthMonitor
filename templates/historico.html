@@ -2,29 +2,28 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Historical Results - Manual Analysis</title>
+    <title>Historical Results - Quick Analysis</title>
     <link rel="stylesheet" href="/static/css/flatpickr.min.css">
-    <link rel="stylesheet" href="/static/css/datatables.min.css">
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@1.4.0"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0"></script>
+    <script src="/static/js/jquery.min.js"></script>
+    <script src="/static/js/chart.min.js"></script>
+    <script src="/static/js/chartjs-plugin-annotation.min.js"></script>
+    <script src="/static/js/chartjs-plugin-datalabels.min.js"></script>
+    <script src="/static/js/flatpickr.min.js"></script>
     <style>
         body {font-family: "Segoe UI", sans-serif;background-color: #f4f4f4;margin: 0;padding: 20px;color: #333;}
         h1 {text-align: center;margin-bottom: 24px;font-size: 1.8em;font-weight: 500;}
-        .upload-area {display: flex;justify-content: center;margin-bottom: 18px;}
-        .upload-area input[type="file"] {padding: 8px;border-radius: 6px;background: #fff;border: 1px solid #ccc;width: 300px;}
         .filters {display: flex;flex-wrap: wrap;justify-content: center;gap: 15px;margin-bottom: 18px;}
         .filters input {padding: 10px;font-size: 1em;border-radius: 6px;border: 1px solid #ccc;min-width: 170px;height: 42px;}
-        .filters button {padding: 10px 20px;min-width: 150px;height: 42px;background-color: #4CAF50;color: white;font-weight: bold;border: none;border-radius: 6px;cursor: pointer;font-size: 0.95em;transition: background-color 0.3s, transform 0.1s;}
-        .filters button#download-btn {background-color: #007BFF;}
+        .filters button {padding: 10px 20px;min-width: 150px;height: 42px;background-color: #2E7D32;color: white;font-weight: bold;border: none;border-radius: 6px;cursor: pointer;font-size: 0.95em;transition: background-color 0.3s, transform 0.1s;}
+        .filters button#download-btn {background-color: #002060;}
         .filters button:hover {filter: brightness(1.05);transform: scale(1.01);}
-        .filters button#download-btn:hover {background-color: #0056b3;}
+        .filters button#download-btn:hover {background-color: #002060;}
         .chart-section {max-width: 1100px;margin: 20px auto 0 auto;background: #fff;border-radius: 10px;padding: 30px 30px 20px 30px;box-shadow: 0 0 16px rgba(0,0,0,0.07);}
         .chart-container {margin-bottom: 46px;}
         .chart-title {text-align: center;margin-bottom: 7px;font-weight: 500;color: #333;letter-spacing: 0.5px;}
         #no-data-msg {text-align: center;margin-top: 50px;color: #aa2323;font-size: 1.15em;font-weight: 500;display: none;}
-        #failures-container {max-width: 900px;margin: 34px auto 0 auto;background: #f9f9ff;border-radius: 10px;box-shadow: 0 0 10px rgba(48, 24, 140, 0.04);padding: 20px 20px 6px 20px;display: none;}
-        #failures-title {text-align: center;color: #5a189a;font-weight: 500;letter-spacing: 0.6px;font-size: 1.15em;margin-bottom: 10px;}
+        #failures-container {max-width: 900px;margin: 34px auto 0 auto;background: #f9f9ff;border-radius: 10px;box-shadow: 0 0 10px rgba(0, 32, 96, 0.08);padding: 20px 20px 6px 20px;display: none;}
+        #failures-title {text-align: center;color: #002060;font-weight: 500;letter-spacing: 0.6px;font-size: 1.15em;margin-bottom: 10px;}
         #filter-banner {
             display:none;
             text-align:center;
@@ -50,22 +49,73 @@
         }
         #filter-icon {margin-right:6px;}
         .footer {text-align: center;color: #757575;font-size: 0.9em;margin-top: 60px;}
+
+        /* Overlay loader con fade */
+        #loading-overlay {
+            display: flex;
+            position: fixed;
+            top:0; left:0; right:0; bottom:0;
+            background: rgba(255,255,255,0.8);
+            z-index: 9999;
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.35s ease;
+        }
+        #loading-overlay.active {
+            opacity: 1;
+            pointer-events: all;
+        }
+        .spinner {
+            width: 55px;
+            height: 55px;
+            border: 6px solid #ccc;
+            border-top: 6px solid #4CAF50;
+            border-radius: 50%;
+            animation: spin 0.9s linear infinite;
+        }
+        .input-hint {
+            text-align: center;
+            font-size: 0.9em;
+            color: #666;
+            margin-top: -6px;
+            margin-bottom: 10px;
+        }
+
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+        #loading-message {
+            margin-top: 14px;
+            font-size: 1.05em;
+            color: #444;
+            font-weight: 500;
+        }
     </style>
 </head>
 <body>
-    <h1>Manual Analysis of FA Results</h1>
-    <div class="upload-area">
-        <input type="file" id="csv-input" accept=".csv">
-    </div>
+    <h1>Quick Data Analysis</h1>
+
     <div class="filters">
-        <input type="text" id="start-date" placeholder="Start date">
-        <input type="text" id="end-date" placeholder="End date">
+        <input type="text" id="start-date"
+                placeholder="Start (YYYY-MM-DD HH:mm, 24h)"
+                title="Use 24-hour time: HH:mm or HH:mm:ss, e.g., 06:00, 22:00">
+        <input type="text" id="end-date"
+                placeholder="End (YYYY-MM-DD HH:mm, 24h)"
+                title="Use 24-hour time: HH:mm or HH:mm:ss, e.g., 06:00, 22:00">
         <input type="text" id="part-filter" placeholder="PartNumber (optional)">
         <button id="analyze-btn">Analyze</button>
         <button id="download-btn">Download CSV</button>
-    </div>
+        </div>
+        <div class="input-hint" id="time-help">
+        ⏱ Time format: <strong>24-hour</strong>.
+        </div>
 
-    <div id="no-data-msg">Load a valid .csv file and press "Analyze".</div>
+
+    <div id="no-data-msg">Load a valid dataset and press "Analyze".</div>
 
     <!-- Filter banner -->
     <div id="filter-banner">
@@ -83,20 +133,63 @@
             <canvas id="yield-part-chart" height="90"></canvas>
         </div>
     </div>
+
     <div id="failures-container">
         <div id="failures-title"></div>
         <canvas id="failures-chart" height="130"></canvas>
     </div>
+
     <div class="footer">
         &copy; Developed by NTW Test Department.<br><br>
         2025 FA Health Monitor.<br><br>
         <a href="mailto:moises.ramirez1@molex.com" style="color: #00ccff; text-decoration: none;">Contact</a>
     </div>
 
+    <!-- Overlay loader -->
+    <div id="loading-overlay">
+        <div class="spinner"></div>
+        <div id="loading-message">Processing...</div>
+    </div>
+
     <script src="/static/js/flatpickr.min.js"></script>
     <script>
-    flatpickr("#start-date", { dateFormat: "Y-m-d" });
-    flatpickr("#end-date", { dateFormat: "Y-m-d" });
+    // Fechas por defecto: hoy 06:00 y hoy 22:00
+    const today = new Date();
+    const startDefault = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 6, 0, 0);
+    const endDefault   = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 22, 0, 0);
+
+    flatpickr("#start-date", {
+    enableTime: true,
+    time_24hr: true,
+    dateFormat: "Y-m-d H:i",   // <-- se envía así al backend
+    minuteIncrement: 1,
+    defaultDate: startDefault, // valor inicial en el input
+    defaultHour: 6,            // si cambias el día, mantiene 06:00
+    defaultMinute: 0
+    });
+
+    flatpickr("#end-date", {
+    enableTime: true,
+    time_24hr: true,
+    dateFormat: "Y-m-d H:i",
+    minuteIncrement: 1,
+    defaultDate: endDefault,
+    defaultHour: 22,
+    defaultMinute: 0
+    });
+
+
+    let filteredData = [];
+    let yieldDateChart = null, yieldPartChart = null, failuresChart = null;
+    let currentFilterDate = null;
+
+    function showLoader(msg="Procesando...") {
+        document.getElementById("loading-message").textContent = msg;
+        document.getElementById("loading-overlay").classList.add("active");
+    }
+    function hideLoader() {
+        document.getElementById("loading-overlay").classList.remove("active");
+    }
 
     function generarColores(count, alpha=0.19) {
         const base = [
@@ -115,97 +208,64 @@
         return colores;
     }
 
-    // CSV parser
-    function parseCSV(content) {
-        const lines = content.split(/\r?\n/).filter(line => line.trim().length);
-        const headers = parseCSVRow(lines[0]);
-        let data = [];
-        for (let i = 1; i < lines.length; i++) {
-            if (!lines[i].trim()) continue;
-            const values = parseCSVRow(lines[i]);
-            while (values.length < headers.length) values.push('');
-            let obj = {};
-            headers.forEach((h, idx) => obj[h.trim()] = (values[idx] || "").trim());
-            data.push(obj);
-        }
-        return data;
-    }
-    function parseCSVRow(row) {
-        const result = [];
-        let inQuotes = false, value = '';
-        for (let i = 0; i < row.length; i++) {
-            const c = row[i];
-            if (c === '"') inQuotes = !inQuotes;
-            else if (c === ',' && !inQuotes) { result.push(value); value = ''; }
-            else value += c;
-        }
-        result.push(value);
-        return result;
-    }
+    // Analyze
+    document.getElementById("analyze-btn").addEventListener("click", () => {
+        showLoader("Consulting DB...");
+        fetch("/fetch_historico_data", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                start_date: document.getElementById("start-date").value,
+                end_date: document.getElementById("end-date").value,
+                part_number: document.getElementById("part-filter").value.trim()
+            })
+        })
+        .then(res => res.json())
+        .then(data => {
+            hideLoader();
+            filteredData = data;
 
-    let rawData = [], filteredData = [];
-    let yieldDateChart = null, yieldPartChart = null, failuresChart = null;
-    let currentFilterDate = null;
+            // 🔹 Apply optional PartNumber filter here too
+            const partFilter = document.getElementById("part-filter").value.trim();
+            if (partFilter) {
+                filteredData = filteredData.filter(r => (r["PartNumber"] || "").trim() === partFilter);
+            }
 
-    document.getElementById("csv-input").addEventListener("change", e => {
-        const file = e.target.files[0];
-        if (!file) return;
-        const reader = new FileReader();
-        reader.onload = ev => {
-            try {
-                rawData = parseCSV(ev.target.result);
-                document.getElementById("no-data-msg").style.display = "none";
+            if (!filteredData.length) {
+                document.getElementById("no-data-msg").textContent = "No data for the applied filters.";
+                document.getElementById("no-data-msg").style.display = "block";
                 document.getElementById("charts-area").style.display = "none";
                 document.getElementById("failures-container").style.display = "none";
-                filteredData = [];
-                if (yieldDateChart) yieldDateChart.destroy();
-                if (yieldPartChart) yieldPartChart.destroy();
-                if (failuresChart) failuresChart.destroy();
-            } catch {
-                rawData = [];
-                document.getElementById("no-data-msg").textContent = "Invalid file or wrong format.";
-                document.getElementById("no-data-msg").style.display = "block";
+                return;
             }
-        };
-        reader.readAsText(file);
+            document.getElementById("no-data-msg").style.display = "none";
+            document.getElementById("charts-area").style.display = "block";
+            renderDateChart(filteredData);
+        })
+        .catch(err => {
+            hideLoader();
+            console.error("[ERROR]", err);
+            alert("Error fetching data");
+        });
     });
 
-    // Analyze button
-    document.getElementById("analyze-btn").addEventListener("click", () => {
-        if (!rawData.length) {
-            document.getElementById("no-data-msg").textContent = "Load a valid .csv file and press 'Analyze'.";
-            document.getElementById("no-data-msg").style.display = "block";
-            document.getElementById("charts-area").style.display = "none";
-            document.getElementById("failures-container").style.display = "none";
-            return;
-        }
+    // Download CSV
+    document.getElementById("download-btn").addEventListener("click", () => {
+        showLoader("Exporting to CSV file...");
         const start = document.getElementById("start-date").value;
         const end = document.getElementById("end-date").value;
         const part = document.getElementById("part-filter").value.trim();
+        const url = `/download_csv?start_date=${encodeURIComponent(start)}&end_date=${encodeURIComponent(end)}&part_number=${encodeURIComponent(part)}`;
 
-        filteredData = rawData.filter(row => {
-            let dateOk = true, partOk = true;
-            if (start) dateOk = (row["TestDate"] && row["TestDate"] >= start);
-            if (end) dateOk = dateOk && (row["TestDate"] && row["TestDate"] <= end);
-            if (part) partOk = (row["PartNumber"] === part);
-            return dateOk && partOk;
-        });
-
-        if (!filteredData.length) {
-            document.getElementById("no-data-msg").textContent = "No data for the applied filters.";
-            document.getElementById("no-data-msg").style.display = "block";
-            document.getElementById("charts-area").style.display = "none";
-            document.getElementById("failures-container").style.display = "none";
-            return;
-        }
-        document.getElementById("no-data-msg").style.display = "none";
-        document.getElementById("charts-area").style.display = "block";
-        document.getElementById("failures-container").style.display = "none";
-        renderDateChart(filteredData);
+        setTimeout(() => {
+            window.open(url, "_blank");
+            hideLoader();
+        }, 1200);
     });
 
-    // Render Yield by Date + Forecast
+    // Yield por fecha con forecast + tooltips mejorados
     function renderDateChart(data) {
+        // --- Agrupar por fecha ---
         const byDate = {};
         data.forEach(row => {
             const d = row["TestDate"];
@@ -214,82 +274,154 @@
             byDate[d].total++;
             if ((row["TestResult"]||"").toUpperCase() === "PASS") byDate[d].passed++;
         });
+
         const dateLabels = Object.keys(byDate).sort();
         const yieldByDate = dateLabels.map(d => (byDate[d].passed/byDate[d].total)*100);
 
-        // Forecast regression
+        // --- Forecast lineal (seguro) ---
         const n = dateLabels.length;
-        const xVals = dateLabels.map((_,i)=>i);
-        const yVals = yieldByDate;
-        const meanX = xVals.reduce((a,b)=>a+b,0)/n;
-        const meanY = yVals.reduce((a,b)=>a+b,0)/n;
-        let num=0, den=0;
-        for(let i=0;i<n;i++){num+=(xVals[i]-meanX)*(yVals[i]-meanY);den+=(xVals[i]-meanX)**2;}
-        const slope=num/den, intercept=meanY - slope*meanX;
-        const forecastDays=7;
-        const forecastLabels = Array.from({length: forecastDays}, (_, i) => `F+${i+1}`);
-        const forecastY = forecastLabels.map((_,i)=>Math.min(100, Math.max(0, intercept + slope*(n+i))));
+        let forecastLabels = [];
+        let forecastY = [];
 
-        let minY = Math.min(...yieldByDate, ...forecastY);
-        let maxY = Math.max(...yieldByDate, ...forecastY);
-        const margin = (maxY - minY) * 0.15;
-        let yMin = Math.max(0, Math.floor(minY - margin));
-        let yMax = Math.min(100, Math.ceil(maxY + margin));
-        if (yMax > 97 && yMin > 90) { yMin = Math.max(85, minY - 2); yMax = 100; }
+        if (n >= 2) {
+            const xVals = dateLabels.map((_,i)=>i);
+            const yVals = yieldByDate;
+            const meanX = xVals.reduce((a,b)=>a+b,0)/n;
+            const meanY = yVals.reduce((a,b)=>a+b,0)/n;
+            let num=0, den=0;
+            for(let i=0;i<n;i++){ num+=(xVals[i]-meanX)*(yVals[i]-meanY); den+=(xVals[i]-meanX)**2; }
+            const slope = den !== 0 ? (num/den) : 0;
+            const intercept = meanY - slope*meanX;
 
+            const forecastDays=7;
+            forecastLabels = Array.from({length: forecastDays}, (_, i) => `F+${i+1}`);
+            forecastY = forecastLabels.map((_,i)=>Math.min(100, Math.max(0, intercept + slope*(n+i))));
+        } else {
+            // Con 0–1 puntos no se calcula forecast (solo etiquetas fantasma)
+            forecastLabels = Array.from({length: 7}, (_, i) => `F+${i+1}`);
+            forecastY = [];
+        }
+
+        // --- Auto-escala dinámica del eje Y (incluye target 96%) ---
+        const valuesAll = [...yieldByDate, ...forecastY].filter(v => Number.isFinite(v));
+        let yMin = 0, yMax = 100, tickStep = 1;
+
+        if (valuesAll.length >= 1) {
+            const dataMin = Math.min(...valuesAll);
+            const dataMax = Math.max(...valuesAll);
+            const span = Math.max(2, dataMax - dataMin);      // rango mínimo 2%
+            const pad  = Math.max(1, span * 0.15);            // padding mínimo 1%
+
+            yMin = Math.max(0, dataMin - pad);
+            yMax = Math.min(100, dataMax + pad);
+
+            // Garantiza que la meta (96%) quede visible
+            const target = 96;
+            yMin = Math.min(yMin, target - 0.5);
+            yMax = Math.max(yMax, target + 0.5);
+
+            // Redondeo “bonito”
+            yMin = Math.floor(yMin * 10) / 10;
+            yMax = Math.ceil(yMax * 10) / 10;
+
+            // Step según rango
+            tickStep = span > 20 ? 5 : span > 10 ? 2 : span > 5 ? 1 : 0.5;
+        }
+
+        // --- Construcción del gráfico ---
         if (yieldDateChart) yieldDateChart.destroy();
         yieldDateChart = new Chart(document.getElementById('yield-date-chart'), {
             type: 'line',
             data: {
                 labels: [...dateLabels, ...forecastLabels],
                 datasets: [
-                    {label:'Yield %',data:[...yieldByDate, ...Array(forecastDays).fill(null)],borderWidth:2,borderColor:'rgba(72,27,179,0.8)',backgroundColor:'rgba(72,27,179,0.1)',tension:0.13,pointRadius:4,pointBackgroundColor:'rgba(72,27,179,0.85)'},
-                    {label:'Forecast',data:[...Array(dateLabels.length-1).fill(null), yieldByDate[yieldByDate.length-1], ...forecastY],borderWidth:2,borderColor:'rgba(192,192,192,0.9)',borderDash:[6,6],tension:0.13,pointRadius:4,pointBackgroundColor:'rgba(192,192,192,1)'}
+                    {
+                        label:'Yield %',
+                        data:[...yieldByDate, ...Array(forecastLabels.length).fill(null)],
+                        borderWidth:2,
+                        borderColor:'rgba(0,32,96,0.8)',
+                        backgroundColor:'rgba(0,32,96,0.1)',
+                        tension:0.13,
+                        pointRadius:4,
+                        pointBackgroundColor:'rgba(0,32,96,0.85)'
+                    },
+                    {
+                        label:'Forecast',
+                        data: n >= 2
+                            ? [...Array(dateLabels.length-1).fill(null), yieldByDate[yieldByDate.length-1], ...forecastY]
+                            : Array(dateLabels.length + forecastLabels.length).fill(null),
+                        borderWidth:2,
+                        borderColor:'rgba(192,192,192,0.9)',
+                        borderDash:[6,6],
+                        tension:0.13,
+                        pointRadius:4,
+                        pointBackgroundColor:'rgba(192,192,192,1)'
+                    }
                 ]
             },
             options: {
-                responsive: true,
-                plugins: {
-                    tooltip: {
-                        callbacks: {
+                responsive:true,
+                plugins:{
+                    tooltip:{
+                        callbacks:{
                             label: ctx => {
-                                if (ctx.dataset.label === 'Yield %') {
-                                    const date = ctx.label;
-                                    const passed = byDate[date]?.passed ?? '-';
-                                    const total = byDate[date]?.total ?? '-';
-                                    return [`Yield: ${ctx.parsed.y.toFixed(1)} %`, `Pass: ${passed} / Total: ${total}`];
-                                } else {
-                                    return `Forecast: ${ctx.parsed.y.toFixed(1)} %`;
+                                const labelText = ctx.label || "";
+                                const yVal = ctx.parsed?.y;
+                                const isForecast = labelText.startsWith("F+");
+                                if (!isForecast && ctx.dataset.label === 'Yield %') {
+                                    const passed = byDate[labelText]?.passed ?? '-';
+                                    const total = byDate[labelText]?.total ?? '-';
+                                    return [
+                                        `Yield: ${Number.isFinite(yVal) ? yVal.toFixed(1) : '—'} %`,
+                                        `Pass: ${passed} / Total: ${total}`
+                                    ];
+                                } else if (isForecast) {
+                                    return `Forecast: ${Number.isFinite(yVal) ? yVal.toFixed(1) : '—'} %`;
                                 }
+                                return null;
                             }
                         }
                     },
-                    annotation: {
-                        annotations: {
-                            targetLine: {
-                                type: 'line',
-                                yMin: 96, yMax: 96,
-                                borderColor: 'rgba(0,150,0,0.8)',
-                                borderWidth: 2,
-                                borderDash: [6, 6],
-                                label: {enabled:true,content:'Target 96%',position:'end',yAdjust:15,backgroundColor:'rgba(0,150,0,0.1)',color:'rgba(0,120,0,1)',font:{weight:'bold'}}
+                    annotation:{
+                        annotations:{
+                            targetLine:{
+                                type:'line', yMin:96, yMax:96,
+                                borderColor:'rgba(0,150,0,0.8)', borderWidth:2, borderDash:[6,6],
+                                label:{enabled:true, content:'Target 96%', position:'end', yAdjust:15,
+                                    backgroundColor:'rgba(0,150,0,0.1)', color:'rgba(0,120,0,1)', font:{weight:'bold'}}
                             }
                         }
                     }
                 },
-                scales: {x:{title:{display:true,text:"Date"}},y:{min:yMin, max:yMax, grace: '10%',title:{display:true,text:"Yield (%)"}}}
+                scales:{
+                    y:{
+                        beginAtZero:false,
+                        min: yMin,
+                        max: yMax,
+                        ticks:{
+                            stepSize: tickStep,
+                            callback: (v) => {
+                                const showDecimals = (yMax - yMin) <= 5;
+                                return showDecimals ? `${v.toFixed(1)}%` : `${v}%`;
+                            }
+                        },
+                        grid:{ drawBorder:false }
+                    }
+                }
             }
         });
 
-        // click filter
+        // --- Interacciones ---
+        // Click filtra (ignora forecast)
         yieldDateChart.canvas.onclick = evt => {
             const points = yieldDateChart.getElementsAtEventForMode(evt, 'nearest', { intersect: true }, true);
             if (!points.length) return;
-            const date = yieldDateChart.data.labels[points[0].index];
-            if (!dateLabels.includes(date)) return;
-            currentFilterDate = date;
-            const filtered = filteredData.filter(r=>r["TestDate"]===date);
+            const label = yieldDateChart.data.labels[points[0].index] || "";
+            if (label.startsWith("F+")) return; // no filtrar pronóstico
+            if (!dateLabels.includes(label)) return;
 
+            currentFilterDate = label;
+            const filtered = filteredData.filter(r => r["TestDate"] === label);
             const pass = filtered.filter(r => (r["TestResult"]||"").toUpperCase()==="PASS").length;
             const avgYield = (pass/filtered.length)*100;
 
@@ -306,10 +438,11 @@
                 banner.classList.add("danger");
                 document.getElementById("filter-icon").textContent = "⚠️";
             }
-            document.getElementById("filter-label").textContent = `Filter: ${date} (${filtered.length} rows, Avg Yield: ${avgYield.toFixed(1)}%)`;
+            document.getElementById("filter-label").textContent =
+                `Filter: ${label} (${filtered.length} rows, Avg Yield: ${avgYield.toFixed(1)}%)`;
         };
 
-        // double click clear filter
+        // Double click limpia filtro
         yieldDateChart.canvas.ondblclick = () => {
             currentFilterDate = null;
             renderPartChart(filteredData);
@@ -319,7 +452,7 @@
         renderPartChart(filteredData);
     }
 
-    // Yield by PartNumber
+    // Yield por PN con tooltips mejorados
     function renderPartChart(data) {
         const byPart = {};
         data.forEach(row => {
@@ -336,12 +469,22 @@
         if (yieldPartChart) yieldPartChart.destroy();
         yieldPartChart = new Chart(document.getElementById('yield-part-chart'), {
             type: 'bar',
-            data: {labels: partLabels, datasets:[{label:'Yield %',data:yieldByPart,borderWidth:2.1,borderRadius:11,borderSkipped:false,borderColor:'rgba(48,24,140,0.93)',backgroundColor:generarColores(partLabels.length, 0.19),maxBarThickness:46}]},
-            options: {responsive:true,plugins:{tooltip:{callbacks:{label: ctx => {
-                const p = partData[ctx.dataIndex];
-                const passed = Math.round(p.total * p.yield / 100);
-                return [`Yield: ${ctx.parsed.y.toFixed(1)} %`, `Pass: ${passed} / Total: ${p.total}`];
-            }}}},scales:{x:{title:{display:true,text:"PartNumber"}},y:{min:0,max:100,title:{display:true,text:"Yield (%)"}}}}
+            data: {labels: partLabels, datasets:[{label:'Yield %',data:yieldByPart,borderWidth:2.1,borderRadius:11,borderSkipped:false,borderColor:'rgba(0,32,96,0.93)',backgroundColor:generarColores(partLabels.length, 0.19),maxBarThickness:46}]},
+            options: {
+                responsive:true,
+                plugins:{
+                    tooltip:{
+                        callbacks:{
+                            label: ctx => {
+                                const p = partData[ctx.dataIndex];
+                                const passed = Math.round(p.total * p.yield / 100);
+                                return [`Yield: ${ctx.parsed.y.toFixed(1)} %`, `Pass: ${passed} / Total: ${p.total}`];
+                            }
+                        }
+                    }
+                },
+                scales:{y:{min:0,max:100}}
+            }
         });
 
         document.getElementById('yield-part-chart').onclick = evt => {
@@ -351,7 +494,7 @@
         };
     }
 
-    // Failures chart
+    // Fallas con datalabels
     function mostrarGraficaFallas(partNumber, dataSet) {
         const data = dataSet.filter(row => row["PartNumber"] === partNumber);
         const failureCount = {};
@@ -370,18 +513,13 @@
         if (failuresChart) failuresChart.destroy();
         failuresChart = new Chart(document.getElementById('failures-chart'), {
             type: 'bar',
-            data: {labels: sortedLabels, datasets:[{label:'Quantity',data:sortedValues,borderWidth:2.1,borderRadius:11,borderSkipped:false,borderColor:'rgba(72,27,179,0.80)',backgroundColor:generarColores(sortedLabels.length, 0.22),maxBarThickness:54}]},
+            data: {labels: sortedLabels, datasets:[{label:'Quantity',data:sortedValues,borderWidth:2.1,borderRadius:11,borderSkipped:false,borderColor:'rgba(0,32,96,0.80)',backgroundColor:generarColores(sortedLabels.length, 0.22),maxBarThickness:54}]},
             options: {responsive:true,plugins:{legend:{display:false},datalabels:{color:'#222',anchor:'end',align:'top',font:{weight:'bold',size:13},formatter:value=>value}},scales:{x:{title:{display:true,text:"Failure"}},y:{beginAtZero:true,title:{display:true,text:"Quantity"},suggestedMax: Math.max(...sortedValues)*1.05}}},
             plugins:[ChartDataLabels]
         });
         document.getElementById("failures-container").style.display = "block";
     }
 
-    document.getElementById("download-btn").addEventListener("click", () => {
-        window.open("/download_csv", "_blank");
-    });
-
-    // Close filter
     document.getElementById("close-filter").addEventListener("click", () => {
         currentFilterDate = null;
         renderPartChart(filteredData);

@@ -23,6 +23,8 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 import shutil
 import csv
+from watchdog.events import PatternMatchingEventHandler
+
 
 app = Flask(__name__)
 socketio = SocketIO(app)
@@ -49,7 +51,7 @@ folder_labels = {
     "P2": "F3",
     "EOL5": "F4",
     "EOL2": "F5",
-    "EOL3": "F9",
+    "EOL3": "F10",
     "EOL4": "F6",
     "EOL6": "F7",
     "EOL7": "F8"
@@ -68,6 +70,15 @@ class NewFileHandler(FileSystemEventHandler):
             print(f"[WAIT] Ignorando archivo durante reset: {event.src_path}")
             return
         file_path = event.src_path
+        ######new
+        if not file_path.lower().endswith(".csv"):
+            print(f"[SKIP] No-CSV detectado: {file_path}")
+            return
+
+        if is_resetting:
+            print(f"[WAIT] Ignorando archivo durante reset: {event.src_path}")
+            return
+        ######new ends
         parent_folder = get_line_folder(file_path)
         print(f"[INFO] Nuevo archivo detectado: {file_path}")
 
@@ -88,7 +99,7 @@ class NewFileHandler(FileSystemEventHandler):
                     serial_number, test_date, test_time = None, None, None
                     LVResult, HVResult = "", ""
                     failure_line, sFailure = None, None
-                    failure_keywords = ["Failed", "*ERROR", "*MISTAKE", "NO MEASUREMENT", ">"]
+                    failure_keywords = ["Failed", "*ERROR","NO","SHORTCIRCUIT", "*MISTAKE", "NO MEASUREMENT", ">"]
                     current_table = None
 
                     for line in lines:
@@ -146,9 +157,6 @@ class NewFileHandler(FileSystemEventHandler):
                         failure_line = next((l for l in LVResult.split('*') if any(k in l for k in failure_keywords)), None)
                         if not failure_line:
                             failure_line = next((l for l in HVResult.split('*') if any(k in l for k in failure_keywords)), None)
-                        #failure_line = next((l for l in LVResult.splitlines() if any(k in l for k in failure_keywords)), None)########se ajusta para buscar el asetrisco no el salto de línea
-                        #if not failure_line:
-                        #    failure_line = next((l for l in HVResult.splitlines() if any(k in l for k in failure_keywords)), None)
                         sFailure = "Dielectrico"
                         if failure_line:
                             l = failure_line.lower()
@@ -170,12 +178,13 @@ class NewFileHandler(FileSystemEventHandler):
                                 sFailure = "Sello"
                             elif "cover" in l:
                                 sFailure = "Cover"
-                            elif "no continuity" in l:
+                            elif "continuity" in l:
                                 sFailure = "Nucleo"
                             elif "shortcircuit" in l:
                                 sFailure = "Corto"
-                            elif "high resistance" in l:
+                            elif "resistance" in l:
                                 sFailure = "Alta Resistencia"
+                    print(f"🚨🚨🚨🚨🚨[DEBUG] status: {status}")
                     print(f"🚨🚨🚨🚨🚨[DEBUG] status: {status}")
                     print(f"🚨🚨🚨🚨🚨[DEBUG] Motivo de falla clasificado: {sFailure} | Línea analizada: {failure_line}")
                     current_part = reference or test_name or nombre_prueba
@@ -234,7 +243,7 @@ class NewFileHandler(FileSystemEventHandler):
                         "LVResult": LVResult,
                         "HVResult": HVResult
                     }
-                    #insert_test_result(data_to_insert)  # ← Descomenta cuando esté listo
+                    insert_test_result(data_to_insert)  # ← Descomenta cuando esté listo
 
                     with counts_lock:
                         pass_fail_counts[parent_folder]["Passed"] += real_passed
@@ -838,14 +847,11 @@ def fetch_historico_data_route():
 def download_csv():
     try:
         start_date = request.args.get("start_date")
-        end_date = request.args.get("end_date")
-        part_number = request.args.get("part_number")
+        end_date   = request.args.get("end_date")
+        part_number = request.args.get("part_number") or None
 
-        all_results = fetch_historico_data(start_date, end_date)
-        if part_number:
-            filtered = [r for r in all_results if r.get("PartNumber") == part_number]
-        else:
-            filtered = all_results
+        # Usa la misma consulta (con fecha+hora y PN)
+        filtered = fetch_historico_data(start_date, end_date, part_number)
 
         si = io.StringIO()
         writer = csv.DictWriter(si, fieldnames=[
@@ -862,6 +868,7 @@ def download_csv():
     except Exception as e:
         print(f"[ERROR] download_csv: {e}")
         return "Error generando CSV", 500
+
 #####################################################################new ends
 
 if __name__ == '__main__':
