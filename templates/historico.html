@@ -315,12 +315,10 @@
             yMin = Math.max(0, dataMin - pad);
             yMax = Math.min(100, dataMax + pad);
 
-            // Garantiza que la meta (99%) quede visible
-            const target = 99;
+            // Garantiza que la meta (96%) quede visible
+            const target = 96;
             yMin = Math.min(yMin, target - 0.5);
             yMax = Math.max(yMax, target + 0.5);
-
-            // Redondeo “bonito”
             yMin = Math.floor(yMin * 10) / 10;
             yMax = Math.ceil(yMax * 10) / 10;
 
