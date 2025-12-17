@@ -82,8 +82,6 @@ class NewFileHandler(FileSystemEventHandler):
         parent_folder = get_line_folder(file_path)
         print(f"[INFO] Nuevo archivo detectado: {file_path}")
 
-        with counts_lock:
-            line_label = folder_labels.get(parent_folder, "F1")
 
         for attempt in range(5):
             if os.path.exists(file_path):
@@ -136,7 +134,10 @@ class NewFileHandler(FileSystemEventHandler):
                                 test_time = datetime.datetime.strptime(test_time_raw, "%I:%M:%S %p").strftime("%H:%M:%S")
                                 dt_combined = datetime.datetime.strptime(f"{test_date} {test_time}", "%m/%d/%Y %H:%M:%S")
                                 adjusted = dt_combined - datetime.timedelta(seconds=2)
-                                serial_number = adjusted.strftime("%y%m%d%H%M%S") + folder_labels.get(parent_folder, "F1")
+                                sn_label = folder_labels.get(parent_folder, "F1")
+                                sn_label = "F0" if sn_label == "F10" else sn_label
+                                serial_number = adjusted.strftime("%y%m%d%H%M%S") + sn_label
+
                             except Exception as e:
                                 print(f"[ERROR] Tiempo inválido: {e}")
 
@@ -230,14 +231,16 @@ class NewFileHandler(FileSystemEventHandler):
                     adjusted_elapsed_time = oee_data["adjusted_elapsed_time"]
                     if parent_folder not in inactivity_accumulated_oee:
                         inactivity_accumulated_oee[parent_folder] = adjusted_elapsed_time
+                    raw_label = folder_labels[parent_folder]   # aquí será F10 para EOL3
+                    db_label = "F0" if raw_label == "F10" else raw_label
                     data_to_insert = {
                         "SerialNumber": serial_number,
                         "PartNumber": current_part,
                         "TestDate": datetime.datetime.strptime(test_date, "%m/%d/%Y").strftime("%Y-%m-%d") if test_date else None,
                         "TestTime": test_time,
                         "Shift": determine_shift(test_time),
-                        "FALine": folder_labels.get(parent_folder, "F1"),
-                        "Tester": "EOL1" if parent_folder[0].isdigit() else parent_folder,
+                        "FALine": db_label,   # 👈 AQUÍ YA SE GUARDA F0
+                        "Tester": parent_folder,
                         "TestResult": status,
                         "Failure": sFailure or "N/A",
                         "LVResult": LVResult,
@@ -295,10 +298,7 @@ def emit_data():
     now = datetime.datetime.now()
 
     for parent_folder, counts in pass_fail_counts.items():
-        if parent_folder[0].isdigit():
-            label = "F1"
-        else:
-            label = folder_labels.get(parent_folder, parent_folder)
+        label = folder_labels.get(parent_folder, parent_folder)
         total_tests = counts["Passed"] + counts["Failed"]
         yield_value = (counts["Passed"] / total_tests) * 100 if total_tests > 0 else 0
         avg_cycle_time = get_average_cycle_time(parent_folder)
@@ -422,15 +422,19 @@ def calculate_oee(line):
         if not part_number or part_number == "N/A":
             part_number = pass_fail_counts[line].get("Nombre de la prueba", "N/A")
     # Asignar tiempo de ciclo ideal basado en el número de parte (10 seg por defecto)
-    if line[0].isdigit():
-        ideal_cycle_time = 3600 / 264  # Si la línea comienza con un número, usar 3600/264
-        #print(f"[VALIDACIÓN] Línea {line} comienza con un número. Asignando ideal_cycle_time: {ideal_cycle_time:.2f} segundos")
+    # Asignar tiempo de ciclo ideal basado en línea / número de parte
+    line_label = folder_labels.get(line, line)
+
+    # Caso especial: F1 (EOL1) corre a 264 pzs/hr
+    if line_label == "F1" or line == "EOL1":
+        ideal_cycle_time = 3600 / 264
+
     elif part_number in ideal_cycle_times:
-        ideal_cycle_time = ideal_cycle_times[part_number]  # Usar el valor del diccionario si el número de parte está definido
-        #print(f"[VALIDACIÓN] Número de parte detectado: {part_number} - Asignando ideal_cycle_time: {ideal_cycle_time:.2f} segundos")
+        ideal_cycle_time = ideal_cycle_times[part_number]
+
     else:
-        ideal_cycle_time = 3600 / 340  # Valor por defecto si no se cumplen las otras reglas
-        #print(f"[VALIDACIÓN] Número de parte no encontrado en la lista. Usando valor por defecto: {ideal_cycle_time:.2f} segundos")
+        ideal_cycle_time = 3600 / 340
+
     shift_durations = {
         "T1": 8 * 3600,  # 8 horas en segundos
         "T2": 7.5 * 3600,  # 7.5 horas en segundos
@@ -442,7 +446,7 @@ def calculate_oee(line):
     break_time = 2700  # 45 minutos (30 min comedor + 10 min de break + 5 min ejercicios)
     proportional_break_time = (elapsed_time / current_shift_duration) * break_time
     adjusted_elapsed_time = elapsed_time
-    line_label = folder_labels.get(line, line)
+    #line_label = folder_labels.get(line, line) duplicado arriba
     if current_mode == "POEE":
         inactive_time = inactivity_accumulated_poee.get(line, 0)
     else:

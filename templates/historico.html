@@ -315,8 +315,8 @@
             yMin = Math.max(0, dataMin - pad);
             yMax = Math.min(100, dataMax + pad);
 
-            // Garantiza que la meta (96%) quede visible
-            const target = 96;
+            // Garantiza que la meta (99%) quede visible
+            const target = 99;
             yMin = Math.min(yMin, target - 0.5);
             yMax = Math.max(yMax, target + 0.5);
 
