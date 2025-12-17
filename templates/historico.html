@@ -321,12 +321,8 @@
             yMax = Math.max(yMax, target + 0.5);
             yMin = Math.floor(yMin * 10) / 10;
             yMax = Math.ceil(yMax * 10) / 10;
-
-            // Step según rango
             tickStep = span > 20 ? 5 : span > 10 ? 2 : span > 5 ? 1 : 0.5;
         }
-
-        // --- Construcción del gráfico ---
         if (yieldDateChart) yieldDateChart.destroy();
         yieldDateChart = new Chart(document.getElementById('yield-date-chart'), {
             type: 'line',
