@@ -407,10 +407,13 @@ def calculate_oee(line):
         "2098700316": 3600/150,  # 150/hr
         "2098700154": 3600/165,  # 165/hr
         "2098700083": 3600/165,  # 165/hr
+        "2099700058": 3600/120,  # 120/hr
+        "2099700059": 3600/120,  # 120/hr
         "2154170050": 3600/75,   # 75/hr     cambio a 75 desde 55
         "2154170052": 3600/72,   # 72/hr   
         "2154150582": 3600/165,  # 165/hr    cambio a 165 desde 150
         "2154170049": 3600/72    # 72/hr
+
     }
     if line not in pass_fail_counts:
         print(f"[ERROR] Línea {line} no encontrada en pass_fail_counts. Usando N/A")

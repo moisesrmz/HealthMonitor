@@ -264,6 +264,7 @@
     });
 
     // Yield por fecha con forecast + tooltips mejorados
+    // Yield por fecha con forecast + tooltips mejorados + trendline
     function renderDateChart(data) {
         // --- Agrupar por fecha ---
         const byDate = {};
@@ -283,15 +284,22 @@
         let forecastLabels = [];
         let forecastY = [];
 
+        // ✅ Para trendline también ocupamos slope/intercept (si n>=2)
+        let slope = 0;
+        let intercept = (yieldByDate[0] ?? 0);
+
         if (n >= 2) {
             const xVals = dateLabels.map((_,i)=>i);
-            const yVals = yieldByDate;
             const meanX = xVals.reduce((a,b)=>a+b,0)/n;
-            const meanY = yVals.reduce((a,b)=>a+b,0)/n;
+            const meanY = yieldByDate.reduce((a,b)=>a+b,0)/n;
+
             let num=0, den=0;
-            for(let i=0;i<n;i++){ num+=(xVals[i]-meanX)*(yVals[i]-meanY); den+=(xVals[i]-meanX)**2; }
-            const slope = den !== 0 ? (num/den) : 0;
-            const intercept = meanY - slope*meanX;
+            for(let i=0;i<n;i++){
+                num += (xVals[i]-meanX) * (yieldByDate[i]-meanY);
+                den += (xVals[i]-meanX) ** 2;
+            }
+            slope = den !== 0 ? (num/den) : 0;
+            intercept = meanY - slope*meanX;
 
             const forecastDays=7;
             forecastLabels = Array.from({length: forecastDays}, (_, i) => `F+${i+1}`);
@@ -301,6 +309,12 @@
             forecastLabels = Array.from({length: 7}, (_, i) => `F+${i+1}`);
             forecastY = [];
         }
+
+        // ✅ Trendline SOLO histórico (no toca forecast)
+        //    Se dibuja para cada punto histórico y se corta con null en el forecast.
+        const trendHist = (n >= 2)
+            ? Array.from({length: n}, (_, i) => Math.min(100, Math.max(0, intercept + slope*i)))
+            : Array(n).fill(null);
 
         // --- Auto-escala dinámica del eje Y (incluye target 96%) ---
         const valuesAll = [...yieldByDate, ...forecastY].filter(v => Number.isFinite(v));
@@ -323,22 +337,33 @@
             yMax = Math.ceil(yMax * 10) / 10;
             tickStep = span > 20 ? 5 : span > 10 ? 2 : span > 5 ? 1 : 0.5;
         }
+
         if (yieldDateChart) yieldDateChart.destroy();
+
         yieldDateChart = new Chart(document.getElementById('yield-date-chart'), {
             type: 'line',
             data: {
                 labels: [...dateLabels, ...forecastLabels],
                 datasets: [
+                    // ✅ Históricos MÁS suaves (azul NTW más claro)
                     {
                         label:'Yield %',
                         data:[...yieldByDate, ...Array(forecastLabels.length).fill(null)],
                         borderWidth:2,
-                        borderColor:'rgba(0,32,96,0.8)',
-                        backgroundColor:'rgba(0,32,96,0.1)',
-                        tension:0.13,
-                        pointRadius:4,
-                        pointBackgroundColor:'rgba(0,32,96,0.85)'
-                    },
+                        borderColor:'rgba(0,32,96,0.45)',
+                        backgroundColor:'rgba(0,32,96,0.05)',
+                        tension:0.18,
+
+                        // ✅ PUNTOS SUAVES MISMO TONO
+                        pointRadius: 2.5,                          // más pequeños
+                        pointHoverRadius: 4,
+                        pointBackgroundColor: 'rgba(0,32,96,0.35)',// mismo tono pero más transparente
+                        pointBorderColor: 'rgba(0,32,96,0.35)',    // borde igual al fondo (se “pierde”)
+                        pointBorderWidth: 1,                       // borde delgado
+                        pointHitRadius: 10                         // click cómodo aunque sean pequeños
+                        },
+
+                    // ✅ Forecast (NO se modifica)
                     {
                         label:'Forecast',
                         data: n >= 2
@@ -350,6 +375,17 @@
                         tension:0.13,
                         pointRadius:4,
                         pointBackgroundColor:'rgba(192,192,192,1)'
+                    },
+
+                    // ✅ Trendline oscuro punteado (solo histórico)
+                    {
+                        label:'Trendline',
+                        data:[...trendHist, ...Array(forecastLabels.length).fill(null)],
+                        borderWidth:2.6,
+                        borderColor:'rgba(0,0,0,0.78)', // <-- más oscura
+                        borderDash:[4,4],               // <-- punteada
+                        tension:0,
+                        pointRadius:0
                     }
                 ]
             },
@@ -362,6 +398,7 @@
                                 const labelText = ctx.label || "";
                                 const yVal = ctx.parsed?.y;
                                 const isForecast = labelText.startsWith("F+");
+
                                 if (!isForecast && ctx.dataset.label === 'Yield %') {
                                     const passed = byDate[labelText]?.passed ?? '-';
                                     const total = byDate[labelText]?.total ?? '-';
@@ -369,8 +406,11 @@
                                         `Yield: ${Number.isFinite(yVal) ? yVal.toFixed(1) : '—'} %`,
                                         `Pass: ${passed} / Total: ${total}`
                                     ];
-                                } else if (isForecast) {
+                                } else if (ctx.dataset.label === 'Forecast') {
                                     return `Forecast: ${Number.isFinite(yVal) ? yVal.toFixed(1) : '—'} %`;
+                                } else if (ctx.dataset.label === 'Trendline') {
+                                    // Trendline también muestra valor
+                                    return `Trendline: ${Number.isFinite(yVal) ? yVal.toFixed(1) : '—'} %`;
                                 }
                                 return null;
                             }
