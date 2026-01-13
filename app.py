@@ -446,7 +446,7 @@ def calculate_oee(line):
     current_time = now.strftime("%H:%M:%S")
     current_shift = determine_shift(current_time)
     current_shift_duration = shift_durations[current_shift]
-    break_time = 2700  # 45 minutos (30 min comedor + 10 min de break + 5 min ejercicios)
+    break_time = 2100  # 35 minutos (30 min comedor + 5 min ejercicios) se suspende break de 10 min
     proportional_break_time = (elapsed_time / current_shift_duration) * break_time
     adjusted_elapsed_time = elapsed_time
     #line_label = folder_labels.get(line, line) duplicado arriba
