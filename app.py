@@ -110,17 +110,6 @@ class NewFileHandler(FileSystemEventHandler):
                         print(f"[ERROR] Archivo incompleto o vacío: {file_path}")
                         return
 
-
-                    if parent_folder == "EOL1":
-                        print("\n================ DEBUG F1 FILE =================")
-                        print(f"[DEBUG] Archivo: {file_path}")
-                        print(f"[DEBUG] Total líneas leídas: {len(lines)}")
-                        for i, raw_line in enumerate(lines[:15]):
-                            print(f"[DEBUG F1 RAW {i}] -> {repr(raw_line)}")
-                        print("================================================\n")
-
-
-
                     passed, failed = 0, 0
                     status, reference, test_name, nombre_prueba = None, None, None, None
                     serial_number, test_date, test_time = None, None, None
@@ -626,42 +615,77 @@ def log_network_outage(start_time, end_time):
 
     print(f"[LOG] Caída de red registrada:\n{log_entry}")
 
+import socket
+
+HEARTBEAT_INTERVAL = 5
+PRINT_INTERVAL = 60
+
+def check_network():
+    try:
+        socket.gethostbyname("mlxgumvwfile01")
+        return True
+    except:
+        return False
+
+
 def start_monitoring():
-    """Monitorea la carpeta de red y reacciona más rápido ante caídas y reconexiones."""
-    outage_start_time = None  
-    observer = Observer(timeout=WATCHDOG_INTERVAL)  # Instancia de Watchdog
-    event_handler = NewFileHandler()
+    global observer
+
+    online = False
+    disconnect_time = None
+    last_print_time = 0
+
+    observer = None
 
     while True:
-        if is_network_available():
-            if outage_start_time:
-                outage_end_time = datetime.datetime.now()
-                log_network_outage(outage_start_time, outage_end_time)
-                outage_start_time = None  # Reseteamos la variable
+        now = time.time()
+        network_status = check_network()
 
-            print("[INFO] Red detectada. Iniciando monitoreo de archivos...")
-            
-            # 🔹 Evita iniciar múltiples instancias de Watchdog
-            if not observer.is_alive():
-                observer.schedule(event_handler, NETWORK_FOLDER, recursive=True)
-                try:
-                    observer.start()  # 🔹 Iniciar solo si no está en ejecución
-                except RuntimeError:
-                    print("[ERROR] Watchdog ya estaba iniciado. Omitiendo.")
+        # 🟢 Red detectada por primera vez o reconectada
+        if network_status and not online:
+            print("[🟢] Red disponible. Iniciando monitoreo...")
 
-            time.sleep(CHECK_INTERVAL)  # 🔹 Revisar la red cada 2 segundos para evitar bloqueos
-        else:
-            if outage_start_time is None:
-                outage_start_time = datetime.datetime.now()
-                print(f"[WARNING] Red caída desde {outage_start_time.strftime('%Y-%m-%d %H:%M:%S')}")
+            try:
+                if observer and observer.is_alive():
+                    observer.stop()
+                    observer.join(timeout=5)
 
-            if observer.is_alive():
-                observer.stop()  # 🔹 Detiene el observador si la red se cae
-                observer.join()  # 🔹 Esperar a que el hilo se cierre antes de continuar
-                print("[INFO] Watchdog detenido debido a la caída de la red.")
+                observer = Observer()
+                handler = NewFileHandler()
+                observer.schedule(handler, NETWORK_FOLDER, recursive=True)
+                observer.start()
 
-            print("[WARNING] No se puede acceder a la red. Esperando reconexión...")
-            time.sleep(CHECK_INTERVAL)  # 🔹 Revisar más frecuentemente si la red vuelve
+                print("[✅] Watchdog activo.")
+                online = True
+
+            except Exception as e:
+                print(f"[❌] Error iniciando observer: {e}")
+
+            last_print_time = now
+
+        # 🔴 Red caída
+        elif not network_status and online:
+            disconnect_time = now
+            print(f"[🔴] Red desconectada a las {time.strftime('%H:%M:%S')}")
+            online = False
+
+            if observer and observer.is_alive():
+                observer.stop()
+                observer.join(timeout=5)
+                print("[🛑] Observer detenido.")
+
+        # 💚 Estado estable online
+        elif network_status and now - last_print_time >= PRINT_INTERVAL:
+            print("🟢 Watchdog ONLINE")
+            last_print_time = now
+
+        # ❤️ Estado estable offline
+        elif not network_status and now - last_print_time >= PRINT_INTERVAL:
+            print("🔴 Watchdog OFFLINE")
+            last_print_time = now
+
+        time.sleep(HEARTBEAT_INTERVAL)
+
 
 ##############################################################################################
 
