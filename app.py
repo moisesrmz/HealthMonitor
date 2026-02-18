@@ -16,14 +16,11 @@ from database_operations import insert_kpi
 import numpy as np
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
-from selenium.webdriver.common.by import By
-from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 import shutil
 import csv
-from watchdog.events import PatternMatchingEventHandler
 
 
 app = Flask(__name__)
@@ -61,6 +58,25 @@ cycle_times = defaultdict(list)
 last_file_times = defaultdict(lambda: None)
 is_resetting = False 
 
+def wait_for_complete_file(path, timeout=3):
+    start_time = time.time()
+
+    while time.time() - start_time < timeout:
+        try:
+            if os.path.getsize(path) > 0:
+                with open(path, 'r', encoding='utf-8-sig') as f:
+                    lines = f.readlines()
+
+                    # Validar que el archivo ya contiene información clave
+                    if any("Status:" in l or "Final Test Result:" in l for l in lines):
+                        return lines
+
+        except (PermissionError, OSError):
+            pass
+
+        time.sleep(0.05)
+
+    return None
 
 class NewFileHandler(FileSystemEventHandler):
     def on_created(self, event):
@@ -75,19 +91,26 @@ class NewFileHandler(FileSystemEventHandler):
             print(f"[SKIP] No-CSV detectado: {file_path}")
             return
 
-        if is_resetting:
-            print(f"[WAIT] Ignorando archivo durante reset: {event.src_path}")
-            return
         ######new ends
         parent_folder = get_line_folder(file_path)
         print(f"[INFO] Nuevo archivo detectado: {file_path}")
-
 
         for attempt in range(5):
             if os.path.exists(file_path):
                 try:
                     timestamp = datetime.datetime.now()
                     calculate_cycle_time(parent_folder, timestamp)
+                    lines = wait_for_complete_file(file_path, timeout=3)
+
+                    if not lines:
+                        print(f"[ERROR] Archivo incompleto, bloqueado o vacío: {file_path}")
+                        return
+
+                    if not lines:
+                        print(f"[ERROR] Archivo incompleto o vacío: {file_path}")
+                        return
+
+
                     if parent_folder == "EOL1":
                         print("\n================ DEBUG F1 FILE =================")
                         print(f"[DEBUG] Archivo: {file_path}")
@@ -96,8 +119,8 @@ class NewFileHandler(FileSystemEventHandler):
                             print(f"[DEBUG F1 RAW {i}] -> {repr(raw_line)}")
                         print("================================================\n")
 
-                    with open(file_path, 'r') as file:
-                        lines = file.readlines()
+
+
                     passed, failed = 0, 0
                     status, reference, test_name, nombre_prueba = None, None, None, None
                     serial_number, test_date, test_time = None, None, None
@@ -201,6 +224,7 @@ class NewFileHandler(FileSystemEventHandler):
                     if current_part and prev_part != current_part:
                         reset_line_state(parent_folder, current_part)
                     real_passed = 0
+                    failed = 0###nuevo
                     if not activation_status[parent_folder]["active"]:
                         if status == "Pass":
                             if activation_status[parent_folder]["discount_pass"] > 0:
@@ -245,7 +269,8 @@ class NewFileHandler(FileSystemEventHandler):
                         "PartNumber": current_part,
                         "TestDate": datetime.datetime.strptime(test_date, "%m/%d/%Y").strftime("%Y-%m-%d") if test_date else None,
                         "TestTime": test_time,
-                        "Shift": determine_shift(test_time),
+                        "Shift": determine_shift(test_time) if test_time else None,
+                        #"Shift": determine_shift(test_time),
                         "FALine": db_label,   # 👈 AQUÍ YA SE GUARDA F0
                         "Tester": parent_folder,
                         "TestResult": status,
@@ -506,6 +531,8 @@ def calculate_oee(line):
     }
 
 def determine_shift(test_time):
+    if not test_time:
+        return None
     time_obj = datetime.datetime.strptime(test_time, "%H:%M:%S").time()
     t1_start = datetime.time(6, 30)
     t1_end = datetime.time(14, 30)
@@ -530,7 +557,7 @@ def calculate_cycle_time(line, timestamp):
             if len(cycle_times[line]) > 50:  #aqui se ajusta la cantidad de tiempos a promediar
                 cycle_times[line].pop(0)
         else:
-            print(f"[WARN] Tiempo de ciclo descartado para la línea {line} ({cycle_time:.2f}s). Menor a 5 segundos.")
+            print(f"[WARN] Tiempo de ciclo descartado para la línea {line} ({cycle_time:.2f}s). Menor a 0.05 segundos.")
     else:
         print(f"[INFO] No hay datos previos para la línea {line}. Esperando más datos.")
     last_file_times[line] = timestamp
