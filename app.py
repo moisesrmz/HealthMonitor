@@ -88,10 +88,16 @@ class NewFileHandler(FileSystemEventHandler):
                 try:
                     timestamp = datetime.datetime.now()
                     calculate_cycle_time(parent_folder, timestamp)
+                    if parent_folder == "EOL1":
+                        print("\n================ DEBUG F1 FILE =================")
+                        print(f"[DEBUG] Archivo: {file_path}")
+                        print(f"[DEBUG] Total líneas leídas: {len(lines)}")
+                        for i, raw_line in enumerate(lines[:15]):
+                            print(f"[DEBUG F1 RAW {i}] -> {repr(raw_line)}")
+                        print("================================================\n")
 
                     with open(file_path, 'r') as file:
                         lines = file.readlines()
-
                     passed, failed = 0, 0
                     status, reference, test_name, nombre_prueba = None, None, None, None
                     serial_number, test_date, test_time = None, None, None
@@ -114,7 +120,8 @@ class NewFileHandler(FileSystemEventHandler):
                         elif "Test Name:" in line:
                             nombre_prueba = re.sub(r'^[*,\s]+', '', line.split("Test Name:")[-1].strip())
 
-                        if "Serial number:" in line and not line.startswith("EOL Serial number:"):
+                        #if "Serial number:" in line and not line.startswith("EOL Serial number:"):
+                        if line.startswith("Serial number:"):
                             serial_number = re.sub(r'^[*,\s]+', '', line.split("Serial number:")[-1].strip())
                             if len(serial_number) >= 14:
                                 year = serial_number[:2]
@@ -773,7 +780,7 @@ def load_fail_discounts():
     global part_fail_discounts
     part_fail_discounts.clear()
     try:
-        with open(r"\\mlxgumvwfile01\Departamentos\Fakra\Pruebas\Proyectos\HealthMonitor\QTYnegatives.csv", mode='r') as file:
+        with open(r"\\mlxgumvwfile01\Departamentos\Fakra\Pruebas\Proyectos\HealthMonitor - NewVersion\QTYnegatives.csv", mode='r') as file:
             reader = csv.reader(file)
             for row in reader:
                 if len(row) >= 2:

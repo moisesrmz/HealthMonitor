@@ -153,9 +153,9 @@
 
     <script src="/static/js/flatpickr.min.js"></script>
     <script>
-    // Fechas por defecto: hoy 06:00 y hoy 22:00
+    // Fechas por defecto: hoy 06:30 y hoy 22:00
     const today = new Date();
-    const startDefault = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 6, 0, 0);
+    const startDefault = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 6, 30, 0);
     const endDefault   = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 22, 0, 0);
 
     flatpickr("#start-date", {
@@ -165,7 +165,7 @@
     minuteIncrement: 1,
     defaultDate: startDefault, // valor inicial en el input
     defaultHour: 6,            // si cambias el día, mantiene 06:00
-    defaultMinute: 0
+    defaultMinute: 30
     });
 
     flatpickr("#end-date", {
