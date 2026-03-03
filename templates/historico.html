@@ -24,6 +24,11 @@
         #no-data-msg {text-align: center;margin-top: 50px;color: #aa2323;font-size: 1.15em;font-weight: 500;display: none;}
         #failures-container {max-width: 900px;margin: 34px auto 0 auto;background: #f9f9ff;border-radius: 10px;box-shadow: 0 0 10px rgba(0, 32, 96, 0.08);padding: 20px 20px 6px 20px;display: none;}
         #failures-title {text-align: center;color: #002060;font-weight: 500;letter-spacing: 0.6px;font-size: 1.15em;margin-bottom: 10px;}
+
+        /* NUEVO: container gráfico fallas por hora */
+        #hourly-failures-container {max-width: 900px;margin: 18px auto 0 auto;background: #f9f9ff;border-radius: 10px;box-shadow: 0 0 10px rgba(0, 32, 96, 0.08);padding: 20px 20px 10px 20px;display: none;}
+        #hourly-failures-title {text-align: center;color: #002060;font-weight: 500;letter-spacing: 0.6px;font-size: 1.10em;margin-bottom: 10px;}
+
         #filter-banner {
             display:none;
             text-align:center;
@@ -109,11 +114,11 @@
         <input type="text" id="part-filter" placeholder="PartNumber (optional)">
         <button id="analyze-btn">Analyze</button>
         <button id="download-btn">Download CSV</button>
-        </div>
-        <div class="input-hint" id="time-help">
-        ⏱ Time format: <strong>24-hour</strong>.
-        </div>
+    </div>
 
+    <div class="input-hint" id="time-help">
+        ⏱ Time format: <strong>24-hour</strong>.
+    </div>
 
     <div id="no-data-msg">Load a valid dataset and press "Analyze".</div>
 
@@ -139,6 +144,12 @@
         <canvas id="failures-chart" height="130"></canvas>
     </div>
 
+    <!-- NUEVO: gráfico fallas por hora -->
+    <div id="hourly-failures-container">
+        <div id="hourly-failures-title"></div>
+        <canvas id="hourly-failures-chart" height="145"></canvas>
+    </div>
+
     <div class="footer">
         &copy; Developed by NTW Test Department.<br><br>
         2025 FA Health Monitor.<br><br>
@@ -159,28 +170,28 @@
     const endDefault   = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 22, 0, 0);
 
     flatpickr("#start-date", {
-    enableTime: true,
-    time_24hr: true,
-    dateFormat: "Y-m-d H:i",   // <-- se envía así al backend
-    minuteIncrement: 1,
-    defaultDate: startDefault, // valor inicial en el input
-    defaultHour: 6,            // si cambias el día, mantiene 06:00
-    defaultMinute: 30
+        enableTime: true,
+        time_24hr: true,
+        dateFormat: "Y-m-d H:i",
+        minuteIncrement: 1,
+        defaultDate: startDefault,
+        defaultHour: 6,
+        defaultMinute: 30
     });
 
     flatpickr("#end-date", {
-    enableTime: true,
-    time_24hr: true,
-    dateFormat: "Y-m-d H:i",
-    minuteIncrement: 1,
-    defaultDate: endDefault,
-    defaultHour: 22,
-    defaultMinute: 0
+        enableTime: true,
+        time_24hr: true,
+        dateFormat: "Y-m-d H:i",
+        minuteIncrement: 1,
+        defaultDate: endDefault,
+        defaultHour: 22,
+        defaultMinute: 0
     });
-
 
     let filteredData = [];
     let yieldDateChart = null, yieldPartChart = null, failuresChart = null;
+    let hourlyFailuresChart = null; // NUEVO
     let currentFilterDate = null;
 
     function showLoader(msg="Procesando...") {
@@ -191,20 +202,24 @@
         document.getElementById("loading-overlay").classList.remove("active");
     }
 
-    function generarColores(count, alpha=0.19) {
-        const base = [
-            [33, 64, 154],
-            [90, 115, 175],
-            [120, 144, 156],
-            [67, 160, 71],
-            [255, 167, 38],
-            [121, 85, 72]
-        ];
+    function generarColores(count, alpha=0.85) {
+
+        const start = { r: 0,   g: 32,  b: 96  };  // Azul NTW profundo
+        const end   = { r: 120, g: 144, b: 156 };  // Gris azulado acero
+
         let colores = [];
+
         for (let i = 0; i < count; i++) {
-            const [r, g, b] = base[i % base.length];
+
+            const ratio = count === 1 ? 0 : i / (count - 1);
+
+            const r = Math.round(start.r + ratio * (end.r - start.r));
+            const g = Math.round(start.g + ratio * (end.g - start.g));
+            const b = Math.round(start.b + ratio * (end.b - start.b));
+
             colores.push(`rgba(${r},${g},${b},${alpha})`);
         }
+
         return colores;
     }
 
@@ -225,7 +240,6 @@
             hideLoader();
             filteredData = data;
 
-            // 🔹 Apply optional PartNumber filter here too
             const partFilter = document.getElementById("part-filter").value.trim();
             if (partFilter) {
                 filteredData = filteredData.filter(r => (r["PartNumber"] || "").trim() === partFilter);
@@ -236,10 +250,15 @@
                 document.getElementById("no-data-msg").style.display = "block";
                 document.getElementById("charts-area").style.display = "none";
                 document.getElementById("failures-container").style.display = "none";
+                document.getElementById("hourly-failures-container").style.display = "none";
                 return;
             }
+
             document.getElementById("no-data-msg").style.display = "none";
             document.getElementById("charts-area").style.display = "block";
+            document.getElementById("failures-container").style.display = "none";
+            document.getElementById("hourly-failures-container").style.display = "none";
+
             renderDateChart(filteredData);
         })
         .catch(err => {
@@ -263,10 +282,8 @@
         }, 1200);
     });
 
-    // Yield por fecha con forecast + tooltips mejorados
     // Yield por fecha con forecast + tooltips mejorados + trendline
     function renderDateChart(data) {
-        // --- Agrupar por fecha ---
         const byDate = {};
         data.forEach(row => {
             const d = row["TestDate"];
@@ -279,12 +296,10 @@
         const dateLabels = Object.keys(byDate).sort();
         const yieldByDate = dateLabels.map(d => (byDate[d].passed/byDate[d].total)*100);
 
-        // --- Forecast lineal (seguro) ---
         const n = dateLabels.length;
         let forecastLabels = [];
         let forecastY = [];
 
-        // ✅ Para trendline también ocupamos slope/intercept (si n>=2)
         let slope = 0;
         let intercept = (yieldByDate[0] ?? 0);
 
@@ -305,31 +320,26 @@
             forecastLabels = Array.from({length: forecastDays}, (_, i) => `F+${i+1}`);
             forecastY = forecastLabels.map((_,i)=>Math.min(100, Math.max(0, intercept + slope*(n+i))));
         } else {
-            // Con 0–1 puntos no se calcula forecast (solo etiquetas fantasma)
             forecastLabels = Array.from({length: 7}, (_, i) => `F+${i+1}`);
             forecastY = [];
         }
 
-        // ✅ Trendline SOLO histórico (no toca forecast)
-        //    Se dibuja para cada punto histórico y se corta con null en el forecast.
         const trendHist = (n >= 2)
             ? Array.from({length: n}, (_, i) => Math.min(100, Math.max(0, intercept + slope*i)))
             : Array(n).fill(null);
 
-        // --- Auto-escala dinámica del eje Y (incluye target 96%) ---
         const valuesAll = [...yieldByDate, ...forecastY].filter(v => Number.isFinite(v));
         let yMin = 0, yMax = 100, tickStep = 1;
 
         if (valuesAll.length >= 1) {
             const dataMin = Math.min(...valuesAll);
             const dataMax = Math.max(...valuesAll);
-            const span = Math.max(2, dataMax - dataMin);      // rango mínimo 2%
-            const pad  = Math.max(1, span * 0.15);            // padding mínimo 1%
+            const span = Math.max(2, dataMax - dataMin);
+            const pad  = Math.max(1, span * 0.15);
 
             yMin = Math.max(0, dataMin - pad);
             yMax = Math.min(100, dataMax + pad);
 
-            // Garantiza que la meta (96%) quede visible
             const target = 96;
             yMin = Math.min(yMin, target - 0.5);
             yMax = Math.max(yMax, target + 0.5);
@@ -345,7 +355,6 @@
             data: {
                 labels: [...dateLabels, ...forecastLabels],
                 datasets: [
-                    // ✅ Históricos MÁS suaves (azul NTW más claro)
                     {
                         label:'Yield %',
                         data:[...yieldByDate, ...Array(forecastLabels.length).fill(null)],
@@ -354,16 +363,13 @@
                         backgroundColor:'rgba(0,32,96,0.05)',
                         tension:0.18,
 
-                        // ✅ PUNTOS SUAVES MISMO TONO
-                        pointRadius: 2.5,                          // más pequeños
+                        pointRadius: 2.5,
                         pointHoverRadius: 4,
-                        pointBackgroundColor: 'rgba(0,32,96,0.35)',// mismo tono pero más transparente
-                        pointBorderColor: 'rgba(0,32,96,0.35)',    // borde igual al fondo (se “pierde”)
-                        pointBorderWidth: 1,                       // borde delgado
-                        pointHitRadius: 10                         // click cómodo aunque sean pequeños
-                        },
-
-                    // ✅ Forecast (NO se modifica)
+                        pointBackgroundColor: 'rgba(0,32,96,0.35)',
+                        pointBorderColor: 'rgba(0,32,96,0.35)',
+                        pointBorderWidth: 1,
+                        pointHitRadius: 10
+                    },
                     {
                         label:'Forecast',
                         data: n >= 2
@@ -376,14 +382,12 @@
                         pointRadius:4,
                         pointBackgroundColor:'rgba(192,192,192,1)'
                     },
-
-                    // ✅ Trendline oscuro punteado (solo histórico)
                     {
                         label:'Trendline',
                         data:[...trendHist, ...Array(forecastLabels.length).fill(null)],
                         borderWidth:2.6,
-                        borderColor:'rgba(0,0,0,0.78)', // <-- más oscura
-                        borderDash:[4,4],               // <-- punteada
+                        borderColor:'rgba(0,0,0,0.78)',
+                        borderDash:[4,4],
                         tension:0,
                         pointRadius:0
                     }
@@ -409,7 +413,6 @@
                                 } else if (ctx.dataset.label === 'Forecast') {
                                     return `Forecast: ${Number.isFinite(yVal) ? yVal.toFixed(1) : '—'} %`;
                                 } else if (ctx.dataset.label === 'Trendline') {
-                                    // Trendline también muestra valor
                                     return `Trendline: ${Number.isFinite(yVal) ? yVal.toFixed(1) : '—'} %`;
                                 }
                                 return null;
@@ -445,13 +448,12 @@
             }
         });
 
-        // --- Interacciones ---
         // Click filtra (ignora forecast)
         yieldDateChart.canvas.onclick = evt => {
             const points = yieldDateChart.getElementsAtEventForMode(evt, 'nearest', { intersect: true }, true);
             if (!points.length) return;
             const label = yieldDateChart.data.labels[points[0].index] || "";
-            if (label.startsWith("F+")) return; // no filtrar pronóstico
+            if (label.startsWith("F+")) return;
             if (!dateLabels.includes(label)) return;
 
             currentFilterDate = label;
@@ -461,6 +463,7 @@
 
             renderPartChart(filtered);
             document.getElementById("failures-container").style.display = "none";
+            document.getElementById("hourly-failures-container").style.display = "none";
 
             const banner = document.getElementById("filter-banner");
             banner.style.display = "block";
@@ -481,12 +484,14 @@
             currentFilterDate = null;
             renderPartChart(filteredData);
             document.getElementById("filter-banner").style.display = "none";
+            document.getElementById("failures-container").style.display = "none";
+            document.getElementById("hourly-failures-container").style.display = "none";
         };
 
         renderPartChart(filteredData);
     }
 
-    // Yield por PN con tooltips mejorados
+    // Yield por PN
     function renderPartChart(data) {
         const byPart = {};
         data.forEach(row => {
@@ -496,14 +501,30 @@
             byPart[p].total++;
             if ((row["TestResult"]||"").toUpperCase() === "PASS") byPart[p].passed++;
         });
-        let partData = Object.entries(byPart).map(([k,v]) => ({part:k,yield:(v.passed/v.total)*100,total:v.total})).sort((a,b)=>a.yield-b.yield);
+
+        let partData = Object.entries(byPart)
+            .map(([k,v]) => ({part:k,yield:(v.passed/v.total)*100,total:v.total}))
+            .sort((a,b)=>a.yield-b.yield);
+
         const partLabels = partData.map(p=>p.part);
         const yieldByPart = partData.map(p=>p.yield);
 
         if (yieldPartChart) yieldPartChart.destroy();
         yieldPartChart = new Chart(document.getElementById('yield-part-chart'), {
             type: 'bar',
-            data: {labels: partLabels, datasets:[{label:'Yield %',data:yieldByPart,borderWidth:2.1,borderRadius:11,borderSkipped:false,borderColor:'rgba(0,32,96,0.93)',backgroundColor:generarColores(partLabels.length, 0.19),maxBarThickness:46}]},
+            data: {
+                labels: partLabels,
+                datasets:[{
+                    label:'Yield %',
+                    data:yieldByPart,
+                    borderWidth:2.1,
+                    borderRadius:11,
+                    borderSkipped:false,
+                    borderColor:'rgba(0,32,96,0.93)',
+                    backgroundColor:generarColores(partLabels.length, 0.19),
+                    maxBarThickness:46
+                }]
+            },
             options: {
                 responsive:true,
                 plugins:{
@@ -524,40 +545,294 @@
         document.getElementById('yield-part-chart').onclick = evt => {
             const points = yieldPartChart.getElementsAtEventForMode(evt, 'nearest', { intersect: true }, true);
             if (!points.length) return;
-            mostrarGraficaFallas(partLabels[points[0].index], data);
+            const pn = partLabels[points[0].index];
+            mostrarGraficaFallas(pn, data);
         };
     }
 
-    // Fallas con datalabels
+    // Fallas (breakdown) + NUEVO: Fallas por hora (stacked)
     function mostrarGraficaFallas(partNumber, dataSet) {
         const data = dataSet.filter(row => row["PartNumber"] === partNumber);
         const failureCount = {};
         let okCount = 0;
+
         data.forEach(row => {
             const fail = (row["Failure"] || "").trim();
             if (!fail || fail.toUpperCase() === "N/A" || fail.toUpperCase() === "PASS") okCount++;
             else failureCount[fail] = (failureCount[fail] || 0) + 1;
         });
+
         let pairs = Object.entries(failureCount).map(([l,v]) => ({l,v})).sort((a,b) => b.v - a.v);
         const sortedLabels = pairs.map(p=>p.l);
         const sortedValues = pairs.map(p=>p.v);
 
-        document.getElementById('failures-title').textContent = `Failure breakdown for PN "${partNumber}". OK: ${okCount}`;
+        document.getElementById('failures-title').textContent =
+            `Failure breakdown for PN "${partNumber}". OK: ${okCount}`;
 
         if (failuresChart) failuresChart.destroy();
         failuresChart = new Chart(document.getElementById('failures-chart'), {
             type: 'bar',
-            data: {labels: sortedLabels, datasets:[{label:'Quantity',data:sortedValues,borderWidth:2.1,borderRadius:11,borderSkipped:false,borderColor:'rgba(0,32,96,0.80)',backgroundColor:generarColores(sortedLabels.length, 0.22),maxBarThickness:54}]},
-            options: {responsive:true,plugins:{legend:{display:false},datalabels:{color:'#222',anchor:'end',align:'top',font:{weight:'bold',size:13},formatter:value=>value}},scales:{x:{title:{display:true,text:"Failure"}},y:{beginAtZero:true,title:{display:true,text:"Quantity"},suggestedMax: Math.max(...sortedValues)*1.05}}},
+            data: {
+                labels: sortedLabels,
+                datasets:[{
+                    label:'Quantity',
+                    data:sortedValues,
+                    borderWidth:2.1,
+                    borderRadius:11,
+                    borderSkipped:false,
+                    borderColor:'rgba(0,32,96,0.80)',
+                    backgroundColor:generarColores(sortedLabels.length, 0.22),
+                    maxBarThickness:54
+                }]
+            },
+            options: {
+                responsive:true,
+                plugins:{
+                    legend:{display:false},
+                    datalabels:{
+                        color:'#222',
+                        anchor:'end',
+                        align:'top',
+                        font:{weight:'bold',size:13},
+                        formatter:value=>value
+                    }
+                },
+                scales:{
+                    x:{title:{display:true,text:"Failure"}},
+                    y:{
+                        beginAtZero:true,
+                        title:{display:true,text:"Quantity"},
+                        suggestedMax: sortedValues.length ? (Math.max(...sortedValues)*1.05) : 1
+                    }
+                }
+            },
             plugins:[ChartDataLabels]
         });
+
         document.getElementById("failures-container").style.display = "block";
+
+        // ✅ NUEVO: render fallas por hora (24 horas fijas)
+        renderHourlyFailuresChart(partNumber, data);
     }
 
+    // NUEVO: stacked bar 24h por modo de falla
+    function renderHourlyFailuresChart(partNumber, data) {
+        if (!data || !data.length) return;
+
+        // ===== OPCIÓN: quitar días completos sin actividad =====
+        const REMOVE_EMPTY_DAYS = false; // cámbialo a true si quieres quitar días "en blanco"
+
+        // Filtra por PN si quisieras usarlo desde afuera (si ya mandas data filtrada, ignora)
+        // data = data.filter(r => (r["PartNumber"] || "").trim() === partNumber);
+
+        // ===== 1) Fechas únicas =====
+        let uniqueDates = [...new Set(data.map(r => (r["TestDate"] || "").trim()).filter(Boolean))].sort();
+
+        if (REMOVE_EMPTY_DAYS) {
+            const activityByDate = {};
+            data.forEach(r => {
+                const d = (r["TestDate"] || "").trim();
+                if (!d) return;
+                // actividad = al menos un TEST ese día
+                activityByDate[d] = (activityByDate[d] || 0) + 1;
+
+                // si quisieras actividad = solo fallas, usa esto en lugar de lo anterior:
+                // const f = (r["Failure"] || "").trim();
+                // if (f && f.toUpperCase() !== "PASS" && f.toUpperCase() !== "N/A") {
+                //   activityByDate[d] = (activityByDate[d] || 0) + 1;
+                // }
+            });
+            uniqueDates = uniqueDates.filter(d => (activityByDate[d] || 0) > 0);
+            if (!uniqueDates.length) return;
+        }
+
+        // ===== 2) Labels y hourMap (key directo, sin búsquedas) =====
+        // label = "MM-DD HH"
+        const labels = [];
+        const hourMap = {}; // key "YYYY-MM-DD HH" -> { mode: count }
+
+        uniqueDates.forEach(date => {
+            for (let h = 0; h < 24; h++) {
+                const hourStr = String(h).padStart(2, "0");
+                const label = `${date.slice(5)} ${hourStr}`; // MM-DD HH
+                labels.push(label);
+                hourMap[`${date} ${hourStr}`] = {};
+            }
+        });
+
+        // ===== 3) Agrupar fallas por fecha+hora =====
+        data.forEach(row => {
+            const date = (row["TestDate"] || "").trim();
+            const hour = (row["TestTime"] || "").slice(0, 2); // "HH"
+            const failure = (row["Failure"] || "").trim();
+
+            if (!date || !hour) return;
+            if (!failure || failure.toUpperCase() === "PASS" || failure.toUpperCase() === "N/A") return;
+
+            // solo cuenta si esa fecha está dentro de uniqueDates (por si filtraste)
+            if (!uniqueDates.includes(date)) return;
+
+            const key = `${date} ${hour}`;
+            if (!hourMap[key]) return;
+
+            hourMap[key][failure] = (hourMap[key][failure] || 0) + 1;
+        });
+
+        // ===== 4) Modos únicos =====
+        const failureModes = [...new Set(
+            data
+                .map(r => (r["Failure"] || "").trim())
+                .filter(f => f && f.toUpperCase() !== "PASS" && f.toUpperCase() !== "N/A")
+        )];
+
+        if (!failureModes.length) {
+            // si no hay fallas, igual puedes mostrar el chart con todo en 0, o esconderlo
+            // aquí lo escondo:
+            document.getElementById("hourly-failures-container").style.display = "none";
+            return;
+        }
+
+        const colors = generarColores(failureModes.length, 0.85);
+
+        // ===== 5) Datasets (sin find) =====
+        const datasets = failureModes.map((mode, idx) => ({
+            label: mode,
+            data: uniqueDates.flatMap(date => {
+                return Array.from({ length: 24 }, (_, h) => {
+                    const hourStr = String(h).padStart(2, "0");
+                    const key = `${date} ${hourStr}`;
+                    return (hourMap[key] && hourMap[key][mode]) ? hourMap[key][mode] : 0;
+                });
+            }),
+            backgroundColor: colors[idx],
+            borderWidth: 0,
+            borderRadius: 0,
+            stack: 'stack1'
+        }));
+
+        // ===== 6) Separadores por día + etiqueta arriba =====
+        const dayBreakAnnotations = {};
+        uniqueDates.forEach((date, idx) => {
+            const startIndex = idx * 24;         // primer barra del día
+            const endIndex = startIndex + 23;    // última barra del día
+
+            // Etiqueta del día al centro del bloque
+            dayBreakAnnotations[`dayLabel_${idx}`] = {
+                type: 'label',
+                xValue: startIndex + 11.5, // centro aprox
+                yValue: 0,                 // el plugin lo posiciona relativo; ajustamos con yAdjust
+                backgroundColor: 'rgba(0,32,96,0.08)',
+                borderColor: 'rgba(0,32,96,0.22)',
+                borderWidth: 1,
+                color: 'rgba(0,32,96,0.95)',
+                content: `${date.slice(5)}`, // "MM-DD"
+                font: { weight: 'bold' },
+                padding: 6,
+                yAdjust: -22, // sube etiqueta
+                textAlign: 'center'
+            };
+
+            // Línea vertical al inicio de cada día (excepto el primero)
+            if (idx > 0) {
+                dayBreakAnnotations[`dayBreak_${idx}`] = {
+                    type: 'line',
+                    xMin: startIndex - 0.5,
+                    xMax: startIndex - 0.5,
+                    borderColor: 'rgba(0,0,0,0.18)',
+                    borderWidth: 1
+                };
+            }
+
+            // (opcional) sombreado por día alternado para que se lea rápido
+            if (idx % 2 === 1) {
+                dayBreakAnnotations[`dayBox_${idx}`] = {
+                    type: 'box',
+                    xMin: startIndex - 0.5,
+                    xMax: endIndex + 0.5,
+                    yMin: 0,
+                    yMax: 'max',
+                    backgroundColor: 'rgba(0,32,96,0.03)',
+                    borderWidth: 0
+                };
+            }
+        });
+
+        // ===== 7) Crear Chart =====
+        if (hourlyFailuresChart) hourlyFailuresChart.destroy();
+
+        hourlyFailuresChart = new Chart(
+            document.getElementById('hourly-failures-chart'),
+            {
+                type: 'bar',
+                data: { labels, datasets },
+                options: {
+                    responsive: true,
+                    interaction: { mode: 'index', intersect: false },
+                    plugins: {
+                        legend: { position: 'top' },
+                        tooltip: {
+                            callbacks: {
+                                // Title más claro: "YYYY-MM-DD HH:00"
+                                title: (items) => {
+                                    const label = items?.[0]?.label || "";
+                                    // label = "MM-DD HH"
+                                    const mmdd = label.slice(0, 5);
+                                    const hh = label.slice(6, 8);
+                                    // reconstruye el YYYY usando uniqueDates según bloque (índice /24)
+                                    const idx = items[0].dataIndex;
+                                    const dayIdx = Math.floor(idx / 24);
+                                    const yyyyMMdd = uniqueDates[dayIdx] || `????-${mmdd}`;
+                                    return `${yyyyMMdd} ${hh}:00`;
+                                },
+                                label: (ctx) => {
+                                    if (!ctx.raw) return null;
+                                    return `${ctx.dataset.label}: ${ctx.raw}`;
+                                }
+                            }
+                        },
+                        annotation: {
+                            annotations: dayBreakAnnotations
+                        }
+                    },
+                    scales: {
+                        x: {
+                            stacked: true,
+                            ticks: {
+                                maxRotation: 0,
+                                minRotation: 0,
+                                autoSkip: false,
+                                // ✅ aquí está la magia: mostramos SOLO la hora (00..23)
+                                callback: (val, index) => {
+                                    const h = index % 24;
+                                    return String(h).padStart(2, "0");
+                                }
+                            },
+                            grid: {
+                                // grid vertical suave para separar horas sin ensuciar
+                                color: (ctx) => (ctx.tick && (ctx.index % 24 === 0))
+                                    ? 'rgba(0,0,0,0.10)'  // inicio de día
+                                    : 'rgba(0,0,0,0.04)'
+                            }
+                        },
+                        y: {
+                            stacked: true,
+                            beginAtZero: true,
+                            title: { display: true, text: 'Failure Count' },
+                            grid: { color: 'rgba(0,0,0,0.06)' }
+                        }
+                    }
+                }
+            }
+        );
+
+        document.getElementById("hourly-failures-container").style.display = "block";
+    }
     document.getElementById("close-filter").addEventListener("click", () => {
         currentFilterDate = null;
         renderPartChart(filteredData);
         document.getElementById("filter-banner").style.display = "none";
+        document.getElementById("failures-container").style.display = "none";
+        document.getElementById("hourly-failures-container").style.display = "none";
     });
     </script>
 </body>
