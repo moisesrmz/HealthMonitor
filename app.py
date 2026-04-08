@@ -902,12 +902,13 @@ def fetch_historico_data_route():
         end_date = data.get("end_date")
         part_number = data.get("part_number")
 
-        results = fetch_historico_data(start_date, end_date, part_number)
-
+        #results = fetch_historico_data(start_date, end_date, part_number)
+        results = fetch_historico_data(start_date, end_date, part_number, include_results=False)
         return jsonify(results or [])
     except Exception as e:
         print(f"[ERROR] fetch_historico_data_route: {e}")
         return jsonify([])
+
 
 @app.route("/download_csv")
 def download_csv():

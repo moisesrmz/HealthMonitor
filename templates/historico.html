@@ -153,7 +153,7 @@
     <div class="footer">
         &copy; Developed by NTW Test Department.<br><br>
         2025 FA Health Monitor.<br><br>
-        <a href="mailto:moises.ramirez1@molex.com" style="color: #00ccff; text-decoration: none;">Contact</a>
+        <a href="mailto:moises.ramirez1@molex.com" style="color: #00ccff; text-decoration: none;">Contact</a><br><br>
     </div>
 
     <!-- Overlay loader -->
@@ -801,7 +801,6 @@
                                 maxRotation: 0,
                                 minRotation: 0,
                                 autoSkip: false,
-                                // ✅ aquí está la magia: mostramos SOLO la hora (00..23)
                                 callback: (val, index) => {
                                     const h = index % 24;
                                     return String(h).padStart(2, "0");

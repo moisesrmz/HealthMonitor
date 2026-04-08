@@ -194,7 +194,8 @@ def insert_kpi(data: dict):
 # ==============================
 # SELECT con fecha+hora
 # ==============================
-def fetch_historico_data(start_date: str, end_date: str, part_number: str | None = None):
+#def fetch_historico_data(start_date: str, end_date: str, part_number: str | None = None):
+def fetch_historico_data(start_date: str, end_date: str, part_number: str | None = None, include_results: bool = True):
     """
     Filtro por rango de fecha+hora inclusivo.
     - start_date/end_date vienen del front como 'YYYY-MM-DD HH:MM' (flatpickr).
@@ -248,8 +249,8 @@ def fetch_historico_data(start_date: str, end_date: str, part_number: str | None
     try:
         connection = pymysql.connect(**DB_CONFIG)
         with connection.cursor(pymysql.cursors.DictCursor) as cursor:
-            base_query = """
-                SELECT
+            if include_results:
+                select_fields = """
                     SerialNumber,
                     PartNumber,
                     DATE_FORMAT(TestDate, '%%Y-%%m-%%d') AS TestDate,
@@ -261,6 +262,22 @@ def fetch_historico_data(start_date: str, end_date: str, part_number: str | None
                     Failure,
                     LVResult,
                     HVResult
+                """
+            else:
+                select_fields = """
+                    SerialNumber,
+                    PartNumber,
+                    DATE_FORMAT(TestDate, '%%Y-%%m-%%d') AS TestDate,
+                    TIME_FORMAT(TestTime, '%%H:%%i:%%s') AS TestTime,
+                    Shift,
+                    FALine,
+                    Tester,
+                    TestResult,
+                    Failure
+                """
+
+            base_query = f"""
+                SELECT {select_fields}
                 FROM TestResults
                 WHERE TIMESTAMP(TestDate, TestTime) BETWEEN %s AND %s
             """
