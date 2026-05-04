@@ -48,9 +48,9 @@ folder_labels = {
     "P2": "F3",
     "EOL5": "F4",
     "EOL2": "F5",
-    "EOL3": "F10",
+    "EOL3": "F7",##antes f10
     "EOL4": "F6",
-    "EOL6": "F7",
+    "EOL6": "F10",##antes F7
     "EOL7": "F8"
 }
 counts_lock = threading.Lock()
@@ -260,7 +260,7 @@ class NewFileHandler(FileSystemEventHandler):
                         "TestTime": test_time,
                         "Shift": determine_shift(test_time) if test_time else None,
                         #"Shift": determine_shift(test_time),
-                        "FALine": db_label,   # 👈 AQUÍ YA SE GUARDA F0
+                        "FALine": db_label,   #  AQUÍ YA SE GUARDA F0
                         "Tester": parent_folder,
                         "TestResult": status,
                         "Failure": sFailure or "N/A",
