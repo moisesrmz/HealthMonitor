@@ -888,9 +888,6 @@ def set_mode(mode):
         return jsonify({"status": "ok", "mode": current_mode})
     return jsonify({"status": "error", "message": "Modo inválido"}), 400
 ########################################################################################new functions
-from flask import send_file, make_response
-import io
-import csv
 
 @app.route("/historico")
 def historico():
