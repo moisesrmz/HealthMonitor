@@ -197,6 +197,8 @@ class NewFileHandler(FileSystemEventHandler):
                                 sFailure = "Dielectrico LUA"
                             elif "cpa" in l:
                                 sFailure = "CPA"
+                            elif "clip" in l:
+                                sFailure = "Clip"
                             elif "sello" in l or "seal" in l:
                                 sFailure = "Sello"
                             elif "cover" in l:
