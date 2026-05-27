@@ -23,6 +23,7 @@ import csv
 from flask import send_file, make_response
 import io
 import csv
+from AOImonitor import start_ao_monitoring
 
 
 
@@ -919,25 +920,31 @@ def download_csv():
         end_date   = request.args.get("end_date")
         part_number = request.args.get("part_number") or None
 
-        # Usa la misma consulta (con fecha+hora y PN)
-        filtered = fetch_historico_data(start_date, end_date, part_number)
+        filtered = fetch_historico_data(
+            start_date,
+            end_date,
+            part_number,
+            exclude_ao=False
+        )
 
         si = io.StringIO()
         writer = csv.DictWriter(si, fieldnames=[
             "SerialNumber", "PartNumber", "TestDate", "TestTime", "Shift", "FALine",
             "Tester", "TestResult", "Failure", "LVResult", "HVResult"
         ])
+
         writer.writeheader()
         writer.writerows(filtered)
 
         output = make_response(si.getvalue())
         output.headers["Content-Disposition"] = "attachment; filename=historico_resultados.csv"
         output.headers["Content-type"] = "text/csv"
+
         return output
+
     except Exception as e:
         print(f"[ERROR] download_csv: {e}")
         return "Error generando CSV", 500
-
 #####################################################################new ends
 
 if __name__ == '__main__':
@@ -948,4 +955,6 @@ if __name__ == '__main__':
     periodic_thread.start()
     reset_thread = threading.Thread(target=schedule_resets, daemon=True)##hilo de reseteo programado
     reset_thread.start()
+    ao_thread = threading.Thread(target=start_ao_monitoring, daemon=True)
+    ao_thread.start()
     socketio.run(app, host="0.0.0.0", port=5000, use_reloader=False)

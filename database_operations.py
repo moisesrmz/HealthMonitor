@@ -195,7 +195,7 @@ def insert_kpi(data: dict):
 # SELECT con fecha+hora
 # ==============================
 #def fetch_historico_data(start_date: str, end_date: str, part_number: str | None = None):
-def fetch_historico_data(start_date: str, end_date: str, part_number: str | None = None, include_results: bool = True):
+def fetch_historico_data(start_date: str, end_date: str, part_number: str | None = None, include_results: bool = True, exclude_ao: bool = True):
     """
     Filtro por rango de fecha+hora inclusivo.
     - start_date/end_date vienen del front como 'YYYY-MM-DD HH:MM' (flatpickr).
@@ -275,13 +275,16 @@ def fetch_historico_data(start_date: str, end_date: str, part_number: str | None
                     TestResult,
                     Failure
                 """
-
+            ####
             base_query = f"""
                 SELECT {select_fields}
                 FROM TestResults
                 WHERE TIMESTAMP(TestDate, TestTime) BETWEEN %s AND %s
             """
             params = [start_dt, end_dt]
+
+            if exclude_ao:
+                base_query += " AND Tester NOT LIKE 'AO%%'"
 
             if part_number and part_number.strip():
                 base_query += " AND PartNumber LIKE %s"
