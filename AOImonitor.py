@@ -2,7 +2,7 @@ import os
 import json
 import time
 from datetime import datetime
-
+import re
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
 from database_operations import insert_test_result
@@ -82,19 +82,40 @@ def determine_shift(dt_obj):
 # =========================================================
 # FAILURES
 # =========================================================
+def normalize_failure_name(header_name):
 
+    # Buscar PN del conector
+    match = re.search(
+        r'([A-Z0-9]{5,}-[A-Z0-9-]+)',
+        header_name
+    )
+
+    if match:
+        return header_name[match.start():].strip()
+
+    return header_name.strip()
 def extract_failures(headers, values):
     failures = []
 
     for i in range(len(values) - 1):
         current = values[i].strip()
-        next_val = values[i + 1].strip()
+        next_val = values[i + 1].strip().upper()
 
-        if next_val.upper() in ["HI", "LO", "FAIL", "NOK"]:
-            header_name = headers[i] if i < len(headers) else f"M{i}"
-            failures.append(f"{header_name}={current}({next_val})")
+        if next_val in ["HI", "LO", "FAIL", "NOK"]:
+            header_name = headers[i].strip() if i < len(headers) else f"M{i}"
 
-    return "; ".join(failures)
+            # Normalizar nombre
+            normalized = normalize_failure_name(header_name)
+
+            failures.append(normalized)
+
+    # Quitar duplicados conservando orden
+    unique_failures = []
+    for f in failures:
+        if f not in unique_failures:
+            unique_failures.append(f)
+
+    return "; ".join(unique_failures)
 
 # =========================================================
 # LV RESULT
@@ -107,11 +128,13 @@ def build_lv_result(headers, values):
         h = headers[i].strip()
         v = values[i].strip()
 
-        if h and v:
-            pairs.append(f"{h}={v}")
+        if not h:
+            continue
+
+        # Guarda toda la info: medición, resultado, flags, NaN, etc.
+        pairs.append(f"{h}={v}")
 
     return "; ".join(pairs)[:5000]
-
 # =========================================================
 # PROCESS DATALINE
 # =========================================================
@@ -194,7 +217,7 @@ def process_dataline(file_path, headers, line):
         if validation_key not in validation_status:
             validation_status[validation_key] = {
                 "pass_left": 2,
-                "fail_left": 8
+                "fail_left": 2
             }
 
         status_control = validation_status[validation_key]

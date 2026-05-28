@@ -901,17 +901,35 @@ def historico():
 def fetch_historico_data_route():
     try:
         data = request.get_json()
+
         start_date = data.get("start_date")
         end_date = data.get("end_date")
         part_number = data.get("part_number")
+        source_type = data.get("source_type", "EOL")
 
-        #results = fetch_historico_data(start_date, end_date, part_number)
-        results = fetch_historico_data(start_date, end_date, part_number, include_results=False)
+        print("=" * 80)
+        print("[HISTORICO ROUTE]")
+        print(f"start_date  : {start_date}")
+        print(f"end_date    : {end_date}")
+        print(f"part_number : {part_number}")
+        print(f"source_type : {source_type}")
+        print("=" * 80)
+
+        results = fetch_historico_data(
+            start_date,
+            end_date,
+            part_number,
+            include_results=False,
+            source_type=source_type
+        )
+
+        print(f"[HISTORICO ROUTE] Rows returned: {len(results or [])}")
+
         return jsonify(results or [])
+
     except Exception as e:
         print(f"[ERROR] fetch_historico_data_route: {e}")
         return jsonify([])
-
 
 @app.route("/download_csv")
 def download_csv():
@@ -924,7 +942,7 @@ def download_csv():
             start_date,
             end_date,
             part_number,
-            exclude_ao=False
+            source_type=""
         )
 
         si = io.StringIO()

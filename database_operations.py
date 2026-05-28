@@ -195,19 +195,23 @@ def insert_kpi(data: dict):
 # SELECT con fecha+hora
 # ==============================
 #def fetch_historico_data(start_date: str, end_date: str, part_number: str | None = None):
-def fetch_historico_data(start_date: str, end_date: str, part_number: str | None = None, include_results: bool = True, exclude_ao: bool = True):
-    """
-    Filtro por rango de fecha+hora inclusivo.
-    - start_date/end_date vienen del front como 'YYYY-MM-DD HH:MM' (flatpickr).
-    - Si USE_MOCK_DB=True => filtra en memoria sobre el mock.
-    - Si DB real => usa TIMESTAMP(TestDate, TestTime) BETWEEN %s AND %s.
-    """
+def fetch_historico_data(
+    start_date: str,
+    end_date: str,
+    part_number: str | None = None,
+    include_results: bool = True,
+    source_type: str = "EOL"
+):
     try:
         start_dt = _parse_ui_datetime(start_date, default_hhmm="06:00")
         end_dt = _parse_ui_datetime(end_date, default_hhmm="22:00")
     except Exception as e:
         print(f"[ERROR] parse UI datetimes: {e}")
         return []
+    source_type = (source_type or "").strip().upper()
+    if source_type and source_type not in ("EOL", "AOI", "SI"):
+        print(f"[WARN] source_type inválido recibido: {source_type}. Usando EOL.")
+        source_type = "EOL"
 
     print(f"[DEBUG] IN start={start_dt} end={end_dt} pn={part_number} USE_MOCK_DB={USE_MOCK_DB}")
 
@@ -281,18 +285,41 @@ def fetch_historico_data(start_date: str, end_date: str, part_number: str | None
                 FROM TestResults
                 WHERE TIMESTAMP(TestDate, TestTime) BETWEEN %s AND %s
             """
+
             params = [start_dt, end_dt]
 
-            if exclude_ao:
-                base_query += " AND Tester NOT LIKE 'AO%%'"
+            if source_type == "EOL":
+                base_query += """
+                    AND (
+                        UPPER(TRIM(Tester)) LIKE 'EOL%%'
+                        OR UPPER(TRIM(Tester)) IN ('P2', 'P3')
+                    )
+                """
 
-            if part_number and part_number.strip():
-                base_query += " AND PartNumber LIKE %s"
-                params.append(f"%{part_number.strip()}%")
+            elif source_type == "AOI":
+                base_query += """
+                    AND UPPER(TRIM(Tester)) LIKE 'AO%%'
+                """
 
+            elif source_type == "SI":
+                base_query += """
+                    AND UPPER(TRIM(Tester)) LIKE 'SI%%'
+                """
+            print("=" * 80)
+            print("[HISTORICO SQL]")
+            print(f"source_type : {source_type}")
+            print(f"start_dt    : {start_dt}")
+            print(f"end_dt      : {end_dt}")
+            print(f"part_number : {part_number}")
+            print("[QUERY]")
+            print(base_query)
+            print("[PARAMS]")
+            print(params)
+            print("=" * 80)
             cursor.execute(base_query, params)
             rows = cursor.fetchall()
-            print(f"[DEBUG] DB rows fetched: {len(rows)}")
+            #print(f"[DEBUG] DB rows fetched: {len(rows)}")
+            print(f"[DEBUG] IN start={start_dt} end={end_dt} pn={part_number} source={source_type} USE_MOCK_DB={USE_MOCK_DB}")
             return rows
 
     except pymysql.MySQLError as e:

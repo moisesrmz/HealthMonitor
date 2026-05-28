@@ -18,6 +18,29 @@
         .filters button#download-btn {background-color: #002060;}
         .filters button:hover {filter: brightness(1.05);transform: scale(1.01);}
         .filters button#download-btn:hover {background-color: #002060;}
+        .tester-selector {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 10px;
+            margin-top: -10px;
+            margin-bottom: 16px;
+        }
+
+        .tester-selector label {
+            font-weight: 600;
+            color: #002060;
+        }
+
+        .tester-selector select {
+            height: 38px;
+            padding: 7px 14px;
+            border-radius: 8px;
+            border: 1px solid #b8c0cc;
+            background: white;
+            color: #002060;
+            font-weight: 600;
+        }
         .chart-section {max-width: 1100px;margin: 20px auto 0 auto;background: #fff;border-radius: 10px;padding: 30px 30px 20px 30px;box-shadow: 0 0 16px rgba(0,0,0,0.07);}
         .chart-container {margin-bottom: 46px;}
         .chart-title {text-align: center;margin-bottom: 7px;font-weight: 500;color: #333;letter-spacing: 0.5px;}
@@ -103,6 +126,14 @@
 </head>
 <body>
     <h1>Quick Data Analysis</h1>
+    <div class="tester-selector">
+        <label for="source-type">Tester type:</label>
+        <select id="source-type">
+            <option value="EOL">EOL</option>
+            <option value="AOI">AOI</option>
+            <option value="SI">SI</option>
+        </select>
+    </div>
 
     <div class="filters">
         <input type="text" id="start-date"
@@ -232,7 +263,8 @@
             body: JSON.stringify({
                 start_date: document.getElementById("start-date").value,
                 end_date: document.getElementById("end-date").value,
-                part_number: document.getElementById("part-filter").value.trim()
+                part_number: document.getElementById("part-filter").value.trim(),
+                source_type: document.getElementById("source-type").value// NUEVO: enviar tipo de tester seleccionado
             })
         })
         .then(res => res.json())
