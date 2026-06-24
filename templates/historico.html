@@ -372,7 +372,7 @@
             yMin = Math.max(0, dataMin - pad);
             yMax = Math.min(100, dataMax + pad);
 
-            const target = 96;
+            const target = 99;
             yMin = Math.min(yMin, target - 0.5);
             yMax = Math.max(yMax, target + 0.5);
             yMin = Math.floor(yMin * 10) / 10;
@@ -454,9 +454,9 @@
                     annotation:{
                         annotations:{
                             targetLine:{
-                                type:'line', yMin:96, yMax:96,
+                                type:'line', yMin:99, yMax:99,
                                 borderColor:'rgba(0,150,0,0.8)', borderWidth:2, borderDash:[6,6],
-                                label:{enabled:true, content:'Target 96%', position:'end', yAdjust:15,
+                                label:{enabled:true, content:'Target 99%', position:'end', yAdjust:15,
                                     backgroundColor:'rgba(0,150,0,0.1)', color:'rgba(0,120,0,1)', font:{weight:'bold'}}
                             }
                         }

@@ -84,57 +84,78 @@ def determine_shift(dt_obj):
 # =========================================================
 def normalize_failure_name(header_name):
 
+    text = header_name.strip()
+
+    # Quitar unidad
+    text = text.replace("(mm)", "").strip()
+
     # Buscar PN del conector
     match = re.search(
-        r'([A-Z0-9]{5,}-[A-Z0-9-]+)',
-        header_name
+        r'\b(?:AMZ\w*|59Z\d+)-[A-Z0-9]+-[A-Z0-9]+(?:-[A-Z0-9]+)*',
+        text
     )
 
-    if match:
-        return header_name[match.start():].strip()
+    if not match:
+        return text
 
-    return header_name.strip()
+    # Conservar desde PN hacia adelante
+    normalized = text[match.start():].strip()
+
+    # Reemplazar "_" por espacios
+    normalized = normalized.replace("_", " ")
+
+    # Quitar DUAL
+    normalized = normalized.replace("DUAL ", "")
+
+    # Limpiar espacios dobles
+    normalized = re.sub(r'\s+', ' ', normalized).strip()
+
+    # Separar PN del detalle
+    parts = normalized.split(" ", 1)
+
+    pn = parts[0]
+    detail = parts[1] if len(parts) > 1 else ""
+
+    if detail:
+        return f"{pn} | {detail}"
+
+    return pn
 def extract_failures(headers, values):
     failures = []
 
-    for i in range(len(values) - 1):
-        current = values[i].strip()
-        next_val = values[i + 1].strip().upper()
+    for i in range(0, min(len(headers), len(values)), 2):
+        header_name = headers[i].strip() if i < len(headers) else f"M{i}"
+        measured_value = values[i].strip() if i < len(values) else ""
+        result_flag = values[i + 1].strip().upper() if i + 1 < len(values) else ""
 
-        if next_val in ["HI", "LO", "FAIL", "NOK"]:
-            header_name = headers[i].strip() if i < len(headers) else f"M{i}"
-
-            # Normalizar nombre
+        if result_flag in ["HI", "LO", "FAIL", "NOK"]:
             normalized = normalize_failure_name(header_name)
-
             failures.append(normalized)
 
-    # Quitar duplicados conservando orden
-    unique_failures = []
-    for f in failures:
-        if f not in unique_failures:
-            unique_failures.append(f)
+    # Solo regresar la primera falla
+    if failures:
+        return failures[0]
 
-    return "; ".join(unique_failures)
-
+    return ""
 # =========================================================
 # LV RESULT
 # =========================================================
-
 def build_lv_result(headers, values):
     pairs = []
 
-    for i in range(min(len(headers), len(values))):
-        h = headers[i].strip()
-        v = values[i].strip()
+    for i in range(0, min(len(headers), len(values)), 2):
+        header_name = headers[i].strip() if i < len(headers) else f"M{i}"
+        measured_value = values[i].strip() if i < len(values) else ""
+        result_flag = values[i + 1].strip() if i + 1 < len(values) else ""
 
-        if not h:
+        if not header_name:
             continue
 
-        # Guarda toda la info: medición, resultado, flags, NaN, etc.
-        pairs.append(f"{h}={v}")
+        normalized_header = normalize_failure_name(header_name)
 
-    return "; ".join(pairs)[:5000]
+        pairs.append(f"{normalized_header}={measured_value}({result_flag})")
+
+    return "; ".join(pairs)
 # =========================================================
 # PROCESS DATALINE
 # =========================================================

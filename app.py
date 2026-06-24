@@ -37,12 +37,12 @@ inactivity_accumulated_poee = defaultdict(float)
 activation_pass_counter = defaultdict(int)
 activation_status = defaultdict(lambda: {
     "active": False,
-    "discount_pass": 2,
+    "discount_pass": 0,
     "discount_fail": 0,
     "current_part_number": None
 })
 
-part_fail_discounts = {}  # Cargado desde CSV
+part_fail_discounts = {}  # Ya no se usa para descuentos; se conserva por compatibilidad
 
 
 pass_fail_counts = defaultdict(lambda: {"Passed": 0, "Failed": 0, "Reference": "", "Test Name": "", "Nombre de la prueba": ""})
@@ -119,11 +119,14 @@ class NewFileHandler(FileSystemEventHandler):
                     serial_number, test_date, test_time = None, None, None
                     LVResult, HVResult = "", ""
                     failure_line, sFailure = None, None
+                    operator_name = None
                     failure_keywords = ["Failed", "*ERROR","NO","SHORTCIRCUIT", "*MISTAKE", "NO MEASUREMENT", ">"]
-                    current_table = None
+                    current_table = None                    
 
                     for line in lines:
                         line = line.strip()
+                        if "Operator:" in line:
+                            operator_name = line.split("Operator:")[-1].strip()
                         if any(keyword in line for keyword in ["Status:", "Final Test Result:", "Resultado final de la prueba:"]):
                             if any(success in line for success in ["Passed", "*PASS", "Pasa"]):
                                 status = "Pass"
@@ -213,41 +216,51 @@ class NewFileHandler(FileSystemEventHandler):
                     print(f"🚨🚨🚨🚨🚨[DEBUG] status: {status}")
                     print(f"🚨🚨🚨🚨🚨[DEBUG] status: {status}")
                     print(f"🚨🚨🚨🚨🚨[DEBUG] Motivo de falla clasificado: {sFailure} | Línea analizada: {failure_line}")
+                    # Ignorar pruebas Debug
+                    if operator_name and operator_name.lower() == "debug":
+                        print(f"[DEBUG] Archivo ignorado. Operator={operator_name}")
+                        return
                     current_part = reference or test_name or nombre_prueba
                     prev_part = activation_status[parent_folder]["current_part_number"]
 
                     if current_part and prev_part != current_part:
                         reset_line_state(parent_folder, current_part)
+                    # =====================================================
+                    # ACTIVACIÓN SIN DESCUENTOS:
+                    # Activa en la 6ª buena y suma 5 buenas al activar
+                    # =====================================================
                     real_passed = 0
-                    failed = 0###nuevo
+                    failed = 0
+
                     if not activation_status[parent_folder]["active"]:
+
                         if status == "Pass":
-                            if activation_status[parent_folder]["discount_pass"] > 0:
-                                activation_status[parent_folder]["discount_pass"] -= 1
-                                print(f"[SKIP PASS] {parent_folder} - Remaining: {activation_status[parent_folder]['discount_pass']}")
-                            else:
-                                activation_pass_counter[parent_folder] += 1
-                                real_passed = 1
-                                print(f"[COUNTED PASS] {parent_folder} - Contador interno: {activation_pass_counter[parent_folder]}")
+                            activation_pass_counter[parent_folder] += 1
+
+                            print(
+                                f"[ACTIVATION PASS] {parent_folder} - "
+                                f"{activation_pass_counter[parent_folder]}/6"
+                            )
+
+                            if activation_pass_counter[parent_folder] == 6:
+                                activation_status[parent_folder]["active"] = True
+                                pass_fail_counts[parent_folder]["Passed"] += 5
+                                real_passed = 0
+
+                                if not poee_start_times.get(parent_folder):
+                                    poee_start_times[parent_folder] = timestamp
+
+                                print(
+                                    f"[🟢 ACTIVADA] {parent_folder} activada en la 6ª buena. "
+                                    f"Se suman 5 buenas."
+                                )
 
                         elif status == "Fail":
-                            if activation_status[parent_folder]["discount_fail"] > 0:
-                                activation_status[parent_folder]["discount_fail"] -= 1
-                                print(f"[SKIP FAIL] {parent_folder} - Remaining: {activation_status[parent_folder]['discount_fail']}")
-                                failed = 0
-                            else:
-                                failed = 1
-                        if activation_pass_counter[parent_folder] == 4:
-                            pass_fail_counts[parent_folder]["Passed"] += 4
-                            real_passed = 0
-                            activation_status[parent_folder]["active"] = True
+                            print(f"[⛔ NO ACTIVA] {parent_folder}, Fail ignorado antes de activación.")
 
-                            if not poee_start_times.get(parent_folder):
-                                poee_start_times[parent_folder] = timestamp - datetime.timedelta(seconds=60)
-                            print(f"[🟢 ACTIVADA] Línea {parent_folder} ACTIVADA tras 6 Passed (2 skip + 4 válidos)")
                         if not activation_status[parent_folder]["active"]:
-                            print(f"[⛔ NO ACTIVA] {parent_folder}, esperando más Passed/Fail")
                             return
+
                     else:
                         if status == "Pass":
                             real_passed = 1
@@ -279,8 +292,7 @@ class NewFileHandler(FileSystemEventHandler):
                         pass_fail_counts[parent_folder]["Passed"] += real_passed
                         print(
                             f"[DEBUG] Resultado: {status}, Línea: {parent_folder}, "
-                            f"Active: {activation_status[parent_folder]['active']}, "
-                            f"Discount FAILs left: {activation_status[parent_folder]['discount_fail']}, "
+                            f"Contado como Pass: {real_passed}, "
                             f"Contado como Fail: {failed}"
                         )
                         pass_fail_counts[parent_folder]["Failed"] += failed
@@ -703,7 +715,7 @@ def reset_all_values():
     global last_reset_time, last_file_times, flag_state, inactivity_state
     global inactivity_accumulated_oee, inactivity_accumulated_poee, poee_start_times
 
-    load_fail_discounts()  # Cargar descuentos desde CSV
+    # Descuentos deshabilitados: ya no se carga QTYnegatives.csv
 
     with counts_lock:
         pass_fail_counts.clear()
@@ -721,8 +733,8 @@ def reset_all_values():
             current_part = "DEFAULT"
             activation_status[line] = {
                 "active": False,
-                "discount_pass": 2,
-                "discount_fail": part_fail_discounts.get(current_part, 0),
+                "discount_pass": 0,
+                "discount_fail": 0,
                 "current_part_number": current_part
             }
             activation_pass_counter[line] = 0
@@ -736,7 +748,7 @@ def reset_all_values():
             }
             cycle_times[line] = []
             last_file_times[line] = None
-            print(f"[🔁 RESET STATUS] {line} - Descuentos: Pass=2, Fail={part_fail_discounts.get(current_part, 0)}")
+            print(f"[🔁 RESET STATUS] {line} - Sin descuentos activos")
 
     print("[INFO] ¡Se han reseteado todas las métricas y valores acumulados!")
 
@@ -854,8 +866,8 @@ def load_fail_discounts():
 def reset_line_state(line_name, new_part_number):
     activation_status[line_name] = {
         "active": False,
-        "discount_pass": 2,
-        "discount_fail": part_fail_discounts.get(new_part_number, 0),
+        "discount_pass": 0,
+        "discount_fail": 0,
         "current_part_number": new_part_number
     }
     activation_pass_counter[line_name] = 0
@@ -935,13 +947,21 @@ def fetch_historico_data_route():
 def download_csv():
     try:
         start_date = request.args.get("start_date")
-        end_date   = request.args.get("end_date")
-        part_number = request.args.get("part_number") or None
+        end_date = request.args.get("end_date")
+        part_number = (request.args.get("part_number") or "").strip()
+
+        print("=" * 80)
+        print("[DOWNLOAD CSV]")
+        print(f"start_date  : {start_date}")
+        print(f"end_date    : {end_date}")
+        print(f"part_number : '{part_number}'")
+        print("=" * 80)
 
         filtered = fetch_historico_data(
             start_date,
             end_date,
-            part_number,
+            part_number if part_number else None,
+            include_results=True,
             source_type=""
         )
 
@@ -950,14 +970,12 @@ def download_csv():
             "SerialNumber", "PartNumber", "TestDate", "TestTime", "Shift", "FALine",
             "Tester", "TestResult", "Failure", "LVResult", "HVResult"
         ])
-
         writer.writeheader()
         writer.writerows(filtered)
 
         output = make_response(si.getvalue())
         output.headers["Content-Disposition"] = "attachment; filename=historico_resultados.csv"
         output.headers["Content-type"] = "text/csv"
-
         return output
 
     except Exception as e:
@@ -966,7 +984,7 @@ def download_csv():
 #####################################################################new ends
 
 if __name__ == '__main__':
-    load_fail_discounts()
+    # Descuentos deshabilitados: no se carga QTYnegatives.csv
     monitor_thread = threading.Thread(target=start_monitoring, daemon=True)
     monitor_thread.start()
     periodic_thread = threading.Thread(target=periodic_update, daemon=True)##hilo de actualizacion

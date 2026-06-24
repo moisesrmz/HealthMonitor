@@ -285,9 +285,13 @@ def fetch_historico_data(
                 FROM TestResults
                 WHERE TIMESTAMP(TestDate, TestTime) BETWEEN %s AND %s
             """
-
             params = [start_dt, end_dt]
 
+            # ==========================================================
+            # Filtro por tipo de tester
+            # Analyze usa: EOL / AOI / SI
+            # Download CSV usa: source_type="" para NO filtrar tester
+            # ==========================================================
             if source_type == "EOL":
                 base_query += """
                     AND (
@@ -305,16 +309,17 @@ def fetch_historico_data(
                 base_query += """
                     AND UPPER(TRIM(Tester)) LIKE 'SI%%'
                 """
-            print("=" * 80)
-            print("[HISTORICO SQL]")
-            print(f"source_type : {source_type}")
-            print(f"start_dt    : {start_dt}")
-            print(f"end_dt      : {end_dt}")
-            print(f"part_number : {part_number}")
-            print("[QUERY]")
-            print(base_query)
-            print("[PARAMS]")
-            print(params)
+            # ==========================================================
+            if part_number and part_number.strip():
+                pn = part_number.strip()
+
+                base_query += """
+                    AND TRIM(PartNumber) LIKE %s
+                """
+
+                params.append(f"%{pn}%")
+
+                print(f"[SQL PN FILTER ACTIVE] PartNumber LIKE '%{pn}%'")
             print("=" * 80)
             cursor.execute(base_query, params)
             rows = cursor.fetchall()
