@@ -81,6 +81,91 @@ def wait_for_complete_file(path, timeout=3):
         time.sleep(0.05)
 
     return None
+#########################################################new implementation high resistance detection 
+def detect_high_resistance(lv_result):
+    """
+    Detecta resistencias fuera de especificación respetando
+    el operador indicado por el log.
+
+    Además identifica NUCLEO/MALLA SOLO dentro del registro
+    específico que presentó la medición fuera de límite.
+
+    Retorna:
+        (True, measured, operator, limit, wire_type)
+    o:
+        (False, None, None, None, None)
+    """
+
+    pattern = re.compile(
+        r'(\d+(?:\.\d+)?)\s*\*ohm\*'
+        r'\s*(<=|>=|<|>)\s*'
+        r'(\d+(?:\.\d+)?)\s*\*ohm\*'
+        r'(.*?\*0\*)',
+        re.IGNORECASE
+    )
+
+    for match in pattern.finditer(lv_result):
+
+        measured = float(match.group(1))
+        operator = match.group(2)
+        limit = float(match.group(3))
+
+        # SOLO el detalle de esta medición
+        line_detail = match.group(4)
+
+        # ==========================================
+        # Evaluar especificación
+        # ==========================================
+        if operator == "<":
+            passes = measured < limit
+
+        elif operator == "<=":
+            passes = measured <= limit
+
+        elif operator == ">":
+            passes = measured > limit
+
+        elif operator == ">=":
+            passes = measured >= limit
+
+        else:
+            continue
+
+        print(
+            f"[RESISTANCE CHECK] "
+            f"{measured} {operator} {limit} "
+            f"=> {'OK' if passes else 'OUT OF LIMIT'}"
+        )
+
+        print(
+            f"[RESISTANCE DETAIL] {line_detail}"
+        )
+
+        # ==========================================
+        # Primera medición fuera de especificación
+        # ==========================================
+        if not passes:
+
+            detail_upper = line_detail.upper()
+
+            if "MALLA" in detail_upper:
+                wire_type = "Malla"
+
+            elif "NUCLEO" in detail_upper:
+                wire_type = "Nucleo"
+
+            else:
+                wire_type = None
+
+            print(
+                f"[HIGH RESISTANCE] "
+                f"{measured} {operator} {limit} | "
+                f"Wire={wire_type}"
+            )
+
+            return True, measured, operator, limit, wire_type
+
+    return False, None, None, None, None
 
 class NewFileHandler(FileSystemEventHandler):
     def on_created(self, event):
@@ -103,7 +188,7 @@ class NewFileHandler(FileSystemEventHandler):
             if os.path.exists(file_path):
                 try:
                     timestamp = datetime.datetime.now()
-                    calculate_cycle_time(parent_folder, timestamp)
+                    
                     lines = wait_for_complete_file(file_path, timeout=3)
 
                     if not lines:
@@ -122,11 +207,15 @@ class NewFileHandler(FileSystemEventHandler):
                     operator_name = None
                     failure_keywords = ["Failed", "*ERROR","NO","SHORTCIRCUIT", "*MISTAKE", "NO MEASUREMENT", ">"]
                     current_table = None                    
-
+                            ####################33
                     for line in lines:
                         line = line.strip()
+
                         if "Operator:" in line:
-                            operator_name = line.split("Operator:")[-1].strip()
+                            operator_name = re.sub(r'^[*,\s]+', '', line.split("Operator:")[-1].strip())
+
+
+                            #################3
                         if any(keyword in line for keyword in ["Status:", "Final Test Result:", "Resultado final de la prueba:"]):
                             if any(success in line for success in ["Passed", "*PASS", "Pasa"]):
                                 status = "Pass"
@@ -213,28 +302,67 @@ class NewFileHandler(FileSystemEventHandler):
                                 sFailure = "Corto"
                             elif "resistance" in l:
                                 sFailure = "Alta Resistencia"
-                    print(f"🚨🚨🚨🚨🚨[DEBUG] status: {status}")
+                        # =====================================================
+                        # NUEVA REGLA:
+                        # Si la lógica anterior dejó Dielectrico,
+                        # revisar si en LV hay resistencia por encima del límite
+                        # =====================================================
+                        # =====================================================
+                        # NUEVA VALIDACIÓN DE ALTA RESISTENCIA
+                        # Solo se ejecuta si la lógica anterior dejó Dielectrico
+                        # =====================================================
+                        if sFailure == "Dielectrico":
+
+                            is_high_res, measured, operator, limit, wire_type = detect_high_resistance(LVResult)
+
+                            if is_high_res:
+
+                                if wire_type == "Nucleo":
+                                    sFailure = "HR Nucleo"
+
+                                elif wire_type == "Malla":
+                                    sFailure = "HR Malla"
+
+                                else:
+                                    sFailure = "Alta Resistencia"
+
+                                print(
+                                    f"[HIGH RESISTANCE DETECTED] "
+                                    f"Measured={measured} ohm | "
+                                    f"Spec={operator}{limit} ohm | "
+                                    f"Failure={sFailure}"
+                                )
+
+                            else:
+                                print(
+                                    "[HIGH RESISTANCE CHECK] "
+                                    "No resistance out of limit detected. "
+                                    "Keeping Failure=Dielectrico"
+                                )
+                                #######################################################3aqui termina validacion high resistance
+                        
                     print(f"🚨🚨🚨🚨🚨[DEBUG] status: {status}")
                     print(f"🚨🚨🚨🚨🚨[DEBUG] Motivo de falla clasificado: {sFailure} | Línea analizada: {failure_line}")
-                    # Ignorar pruebas Debug
-                    if operator_name and operator_name.lower() == "debug":
+                    print(f"[DEBUG] Operator detectado: {operator_name}")
+                    # Ignorar pruebas Debug ANTES de ciclo, cambio de PN, conteo e insert
+                    if operator_name and operator_name.strip().lower() == "debug":
                         print(f"[DEBUG] Archivo ignorado. Operator={operator_name}")
                         return
                     current_part = reference or test_name or nombre_prueba
                     prev_part = activation_status[parent_folder]["current_part_number"]
-
                     if current_part and prev_part != current_part:
                         reset_line_state(parent_folder, current_part)
-                    # =====================================================
-                    # ACTIVACIÓN SIN DESCUENTOS:
-                    # Activa en la 6ª buena y suma 5 buenas al activar
-                    # =====================================================
+                    calculate_cycle_time(parent_folder, timestamp)
                     real_passed = 0
                     failed = 0
 
                     if not activation_status[parent_folder]["active"]:
 
-                        if status == "Pass":
+                        if status == "Fail":
+                            failed = 1
+                            print(f"[COUNTED FAIL BEFORE ACTIVE] {parent_folder}")
+
+                        elif status == "Pass":
                             activation_pass_counter[parent_folder] += 1
 
                             print(
@@ -248,18 +376,9 @@ class NewFileHandler(FileSystemEventHandler):
                                 real_passed = 0
 
                                 if not poee_start_times.get(parent_folder):
-                                    poee_start_times[parent_folder] = timestamp
+                                    poee_start_times[parent_folder] = timestamp - datetime.timedelta(seconds=60)
 
-                                print(
-                                    f"[🟢 ACTIVADA] {parent_folder} activada en la 6ª buena. "
-                                    f"Se suman 5 buenas."
-                                )
-
-                        elif status == "Fail":
-                            print(f"[⛔ NO ACTIVA] {parent_folder}, Fail ignorado antes de activación.")
-
-                        if not activation_status[parent_folder]["active"]:
-                            return
+                                print(f"[🟢 ACTIVADA] {parent_folder} activada en la 6ª buena. Se suman 5 buenas.")
 
                     else:
                         if status == "Pass":
@@ -443,14 +562,14 @@ def calculate_oee(line):
     ideal_cycle_times = {
         "2088702207": 3600/75,  # 75/hr
         "2098700356": 3600/165,  # 165/hr
-        "2098700316": 3600/170,  # 150/hr
+        "2098700316": 3600/170,  # 150/hr cambio a 170 desde 150
         "2098700154": 3600/165,  # 165/hr
         "2098700083": 3600/165,  # 165/hr
         "2099700058": 3600/120,  # 120/hr
         "2099700059": 3600/120,  # 120/hr
         "2154170050": 3600/75,   # 75/hr     cambio a 75 desde 55
         "2154170052": 3600/72,   # 72/hr   
-        "2154150582": 3600/170,  # 165/hr    cambio a 165 desde 150
+        "2154150582": 3600/170,  # 165/hr    cambio a 170 desde 150
         "2154170049": 3600/72,    # 72/hr
         "2098700437": 3600/180    # 180/hr
 
